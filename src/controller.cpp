@@ -1,24 +1,47 @@
-#include <cstdlib>
-
 #include <ros/ros.h>
-#include <mavros_msgs/CommandBool.h>
-#include <mavros_msgs/CommandTOL.h>
-#include <mavros_msgs/SetMode.h>
+#include <tf/tf.h>
+#include <tf/transform_listener.h>
+#include <std_srvs/Empty.h>
+#include "controller.h"
+
+//#include <cstdlib>
+//#include <mavros_msgs/CommandBool.h>
+//#include <mavros_msgs/CommandTOL.h>
+//#include <mavros_msgs/SetMode.h>
 
 int main(int argc, char **argv)
 {
-
+    ROS_INFO("ErleController has started!");
     int rate = 10;
 
-    ros::init(argc, argv, "mavros_takeoff");
+    ros::init(argc, argv, "erle_controller");
     ros::NodeHandle n;
+    double frequency;
+    std::string worldFrame;
+    std::string frame;
+
+    ROS_INFO("loading initial parameters (frequency and frames)");
+
+    n.param<double>("frequency", frequency, 50.0);
+    n.param<std::string>("worldFrame", worldFrame, "/world");
+    n.param<std::string>("frame", frame, "/frame");
+
+    drone::Controller controller(worldFrame, frame, n);
+    ROS_INFO("Running the controller at frequency: %f", frequency);
+    controller.run(frequency);
+
+/*    drone::initializeGoal();
 
     ros::Rate r(rate);
+    tf::Transform currentPose, targetPose;
+    currentPose = drone::getPose();
+    targetPose = drone::getGoal();
+*/
 
     ////////////////////////////////////////////
     /////////////////GUIDED/////////////////////
     ////////////////////////////////////////////
-    ros::ServiceClient cl = n.serviceClient<mavros_msgs::SetMode>("/mavros/set_mode");
+/*    ros::ServiceClient cl = n.serviceClient<mavros_msgs::SetMode>("/mavros/set_mode");
     mavros_msgs::SetMode srv_setMode;
     srv_setMode.request.base_mode = 0;
     srv_setMode.request.custom_mode = "GUIDED";
@@ -81,13 +104,45 @@ int main(int argc, char **argv)
     }else{
         ROS_ERROR("Failed Land");
     }
-
+*/
+/*
     while (n.ok())
     {
       ros::spinOnce();
       r.sleep();
     }
-
+*/
     return 0;
 }
 
+
+namespace drone {
+
+void initializeGoal() {
+    goalPose.setOrigin(tf::Vector3(0.0,0.0,4.0));
+}
+
+void setGoal(tf::Transform target) {
+    goalPose.setOrigin(target.getOrigin());
+}
+    
+tf::Transform getGoal() {
+    return goalPose;
+}
+
+/* Reading the pose from Vicon */
+tf::Transform getPose() {
+    tf::Transform pose;
+    pose.setOrigin(tf::Vector3(0.0,0.0,0.0));
+    return pose;
+}
+
+void sendCommand(DroneCommand cmd) {
+    ROS_INFO("Command being sent to drone (R,P,Y,Th): (%f,%f,%f,%f)"
+                ,cmd.roll, cmd.pitch, cmd.yaw, cmd.thrust);
+    return;
+}
+
+
+
+}
