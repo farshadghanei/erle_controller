@@ -23,8 +23,10 @@ int main(int argc, char **argv)
     ROS_INFO("loading initial parameters (frequency and frames)");
 
     n.param<double>("frequency", frequency, 50.0);
-    n.param<std::string>("worldFrame", worldFrame, "/world");
-    n.param<std::string>("frame", frame, "/frame");
+    //n.param<std::string>("worldFrame", worldFrame, "world");
+    n.getParam("controller_node/worldFrame", worldFrame);
+    //n.param<std::string>("frame", frame, "vicon/Ghanei_ErleCopter/Ghanei_ErleCopter");
+    n.getParam("controller_node/frame", frame);
 
     drone::Controller controller(worldFrame, frame, n);
     ROS_INFO("Running the controller at frequency: %f", frequency);
