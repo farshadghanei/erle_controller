@@ -28,6 +28,10 @@ int main(int argc, char **argv)
 
     drone::Controller controller(worldFrame, frame, n);
     ROS_INFO("Running the controller at frequency: %f", frequency);
+
+    ROS_INFO("Setting MAVROS stream rate...");
+    MAVROS_setStreamRate setStreamRate;
+
     controller.run(frequency);
 
 /*    drone::initializeGoal();
