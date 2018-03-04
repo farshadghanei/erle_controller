@@ -1,0 +1,37 @@
+- Setup your catkin workstation
+- catkin_init_workspace
+- Download vicon_bridge ROS package (http://wiki.ros.org/vicon_bridge)
+- install cmake
+- catkin_make
+- set CATKIN_SOURCE_DIR
+- set ROS_MASTER_URI in both PC and erlecopter to match PC IP address.
+
+apm.service runs on boot, which calls ~/apm.sh which then runs ros.service, which calls /opt/ros/kinetic/setup-ros.bash
+services are in /lib/systemd/system/
+$systemctl start/stop/disable/enable/status apm.service
+
+to run mavros on erlecopter:
+roslaunch mavros apm.launch fcu_url:='udp://@127.0.0.1:6001'
+
+
+
+(NOT TESTED)
+To change IP address of ErleCopter:
+/etc/network/interfaces
+/etc/dnsmasq.conf
+/opt/ros/kinetic/setup-mavros.bash
+(where else??)
+
+
+========
+Erle_Controller
+
+git clone erle_controller, mavros and mavros-msgs
+
+in case catkin_make fails, you can do catkin_make clean, and remove build directory.
+
+Setup ROS parameters in .bashrc
+ROS_MASTER_URI
+
+need to set MY_GSCID to match FCU ID (1)
+
