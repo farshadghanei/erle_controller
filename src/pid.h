@@ -28,6 +28,7 @@ public:
         , m_previousError(0)
         , m_previousTime(ros::Time::now())
     {
+	ROS_INFO("PID %s initialized with min_op=%f max_op=%f", name.c_str(), m_minOutput, m_maxOutput);
     }
 
     void reset()

@@ -32,7 +32,7 @@ int main(int argc, char **argv)
     ROS_INFO("Running the controller at frequency: %f", frequency);
 
     ROS_INFO("Setting MAVROS stream rate...");
-    //MAVROS_setStreamRate setStreamRate;
+    MAVROS_setStreamRate setStreamRate;
 
     controller.run(frequency);
 

@@ -8,21 +8,21 @@
   <node name="controller_node" pkg="erle_controller" type="erle_controller_node" output="screen">
     <param name="frame" value="$(arg frame)" />
     <param name="worldFrame" value="$(arg worldFrame)" />
-    <param name="RC_minOutput" value="1000" type="double"/>
-    <param name="RC_midOutput" value="1495" type="double"/>
-    <param name="RC_maxOutput" value="1800" type="double"/>
-    <param name="RC_minThrust" value="1300" type="double"/>
+    <param name="RC_minOutput" value="1072" type="double"/>
+    <param name="RC_midOutput" value="1496" type="double"/>
+    <param name="RC_maxOutput" value="1920" type="double"/>
+    <param name="RC_minThrust" value="1100" type="double"/>
     <param name="RC_midRoll" value="1495" type="double"/>
     <param name="RC_midPitch" value="1495" type="double"/>
     <param name="RC_midYaw" value="1502" type="double"/>
     <param name="RC_step" value="5" type="double"/>
-    <param name="pid_z_kp" value="50" type="double"/>
-    <param name="pid_z_kd" value="75" type="double"/>
-    <param name="pid_z_ki" value="25" type="double"/>
+    <param name="pid_z_kp" value="150" type="double"/>
+    <param name="pid_z_kd" value="1" type="double"/>
+    <param name="pid_z_ki" value="1" type="double"/>
     <param name="pid_z_min_op" value="-250.0" type="double"/>
     <param name="pid_z_max_op" value="250.0" type="double"/>
-    <param name="pid_z_i_min" value="-50.0" type="double"/>
-    <param name="pid_z_i_max" value="50.0" type="double"/>
+    <param name="pid_z_i_min" value="-75.0" type="double"/>
+    <param name="pid_z_i_max" value="75.0" type="double"/>
     <rosparam command="load" file="$(find erle_controller)/config/config.yaml" />
   </node>
 </launch>
