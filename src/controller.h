@@ -49,40 +49,40 @@ public:
         , m_pubNav()
         , m_listener()
         , m_pidX(
-            get(n, "PIDs/X/kp"),
-            get(n, "PIDs/X/kd"),
-            get(n, "PIDs/X/ki"),
-            get(n, "PIDs/X/minOutput"),
-            get(n, "PIDs/X/maxOutput"),
-            get(n, "PIDs/X/integratorMin"),
-            get(n, "PIDs/X/integratorMax"),
+            get(n, "/controller_node/PIDs/X/kp"),
+            get(n, "/controller_node/PIDs/X/kd"),
+            get(n, "/controller_node/PIDs/X/ki"),
+            get(n, "/controller_node/PIDs/X/minOutput"),
+            get(n, "/controller_node/PIDs/X/maxOutput"),
+            get(n, "/controller_node/PIDs/X/integratorMin"),
+            get(n, "/controller_node/PIDs/X/integratorMax"),
             "x")
         , m_pidY(
-            get(n, "PIDs/Y/kp"),
-            get(n, "PIDs/Y/kd"),
-            get(n, "PIDs/Y/ki"),
-            get(n, "PIDs/Y/minOutput"),
-            get(n, "PIDs/Y/maxOutput"),
-            get(n, "PIDs/Y/integratorMin"),
-            get(n, "PIDs/Y/integratorMax"),
+            get(n, "/controller_node/PIDs/Y/kp"),
+            get(n, "/controller_node/PIDs/Y/kd"),
+            get(n, "/controller_node/PIDs/Y/ki"),
+            get(n, "/controller_node/PIDs/Y/minOutput"),
+            get(n, "/controller_node/PIDs/Y/maxOutput"),
+            get(n, "/controller_node/PIDs/Y/integratorMin"),
+            get(n, "/controller_node/PIDs/Y/integratorMax"),
             "y")
         , m_pidZ(
-            get(n, "/controller_node/pid_z_kp"),//"PIDs/Z/kp"),
-            get(n, "/controller_node/pid_z_kd"),//"PIDs/Z/kd"),
-            get(n, "/controller_node/pid_z_ki"),//"PIDs/Z/ki"),
-            get(n, "/controller_node/pid_z_min_op"),//"PIDs/Z/minOutput"),
-            get(n, "/controller_node/pid_z_max_op"),//"PIDs/Z/maxOutput"),
-            get(n, "/controller_node/pid_z_i_min"),//"PIDs/Z/integratorMin"),
-            get(n, "/controller_node/pid_z_i_max"),//"PIDs/Z/integratorMax"),
+            get(n, "/controller_node/PIDs/Z/kp"),
+            get(n, "/controller_node/PIDs/Z/kd"),
+            get(n, "/controller_node/PIDs/Z/ki"),
+            get(n, "/controller_node/PIDs/Z/minOutput"),
+            get(n, "/controller_node/PIDs/Z/maxOutput"),
+            get(n, "/controller_node/PIDs/Z/integratorMin"),
+            get(n, "/controller_node/PIDs/Z/integratorMax"),
             "z")
         , m_pidYaw(
-            get(n, "PIDs/Yaw/kp"),
-            get(n, "PIDs/Yaw/kd"),
-            get(n, "PIDs/Yaw/ki"),
-            get(n, "PIDs/Yaw/minOutput"),
-            get(n, "PIDs/Yaw/maxOutput"),
-            get(n, "PIDs/Yaw/integratorMin"),
-            get(n, "PIDs/Yaw/integratorMax"),
+            get(n, "/controller_node/PIDs/Yaw/kp"),
+            get(n, "/controller_node/PIDs/Yaw/kd"),
+            get(n, "/controller_node/PIDs/Yaw/ki"),
+            get(n, "/controller_node/PIDs/Yaw/minOutput"),
+            get(n, "/controller_node/PIDs/Yaw/maxOutput"),
+            get(n, "/controller_node/PIDs/Yaw/integratorMin"),
+            get(n, "/controller_node/PIDs/Yaw/integratorMax"),
             "yaw")
         , m_state(Idle)
         , m_goal()
@@ -107,14 +107,14 @@ public:
         ROS_INFO("takeoff and land services advertised");
 		//FARSHAD
         m_serviceHeight = nh.advertiseService("set_goal_height", &Controller::set_goal_height, this);
-	m_RC_midOutput = get(n, "/controller_node/RC_midOutput");
-	m_RC_minOutput = get(n, "/controller_node/RC_minOutput");
-	m_RC_maxOutput = get(n, "/controller_node/RC_maxOutput");
-	m_RC_minThrust = get(n, "/controller_node/RC_minThrust");
-	m_RC_midRoll = get(n, "/controller_node/RC_midRoll");
-	m_RC_midPitch = get(n, "/controller_node/RC_midPitch");
-	m_RC_midYaw = get(n, "/controller_node/RC_midYaw");
-	m_RC_step = get(n, "/controller_node/RC_step");
+	m_RC_midOutput = get(n, "/controller_node/Params/RC_midOutput");
+	m_RC_minOutput = get(n, "/controller_node/Params/RC_minOutput");
+	m_RC_maxOutput = get(n, "/controller_node/Params/RC_maxOutput");
+	m_RC_minThrust = get(n, "/controller_node/Params/RC_minThrust");
+	m_RC_midRoll = get(n, "/controller_node/Params/RC_midRoll");
+	m_RC_midPitch = get(n, "/controller_node/Params/RC_midPitch");
+	m_RC_midYaw = get(n, "/controller_node/Params/RC_midYaw");
+	m_RC_step = get(n, "/controller_node/Params/RC_step");
 	ROS_INFO("RC (min, mid, max, thrust) = (%f, %f, %f, %f)", m_RC_minOutput, m_RC_midOutput, m_RC_maxOutput, m_RC_minThrust);
 	ROS_INFO("RC (roll, pitch, yaw) = (%f, %f, %f)", m_RC_midRoll, m_RC_midPitch, m_RC_midYaw);
         rc_override.channels[0] = m_RC_midRoll;
