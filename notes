@@ -33,5 +33,5 @@ in case catkin_make fails, you can do catkin_make clean, and remove build direct
 Setup ROS parameters in .bashrc
 ROS_MASTER_URI
 
-need to set MY_GSCID to match FCU ID (1)
+need to set SYSID_MYGCS to match FCU ID (1)
 
