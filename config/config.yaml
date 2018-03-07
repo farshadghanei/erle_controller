@@ -16,13 +16,13 @@ PIDs:
     integratorMin: -0.1
     integratorMax: 0.1
   Z:
-    kp: 150.0
-    kd: 100.0
+    kp: 100.0
+    kd: 150.0
     ki: 10.0
     minOutput: -250.0
-    maxOutput: 250.0
-    integratorMin: -200.0
-    integratorMax: 200.0
+    maxOutput: 150.0
+    integratorMin: -50.0
+    integratorMax: 50.0
   Yaw:
     kp: -200.0
     kd: -20.0
@@ -35,8 +35,8 @@ Params:
   RC_minOutput: 1072
   RC_midOutput: 1496
   RC_maxOutput: 1920
-  RC_minThrust: 1100
+  RC_minThrust: 1150
   RC_midRoll: 1495
   RC_midPitch: 1495
   RC_midYaw: 1502
-  RC_step: 25
+  RC_step: 50

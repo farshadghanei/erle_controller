@@ -163,7 +163,7 @@ private:
             std_srvs::Empty::Request& req,
             std_srvs::Empty::Request& res)
     {
-        m_goal.pose.position.z = 2.5;
+        m_goal.pose.position.z = 1;
         m_goal.pose.orientation.w = 1.0;
         ROS_INFO("set_goal_height requested. setting it to %f", m_goal.pose.position.z);
         return true;
@@ -260,14 +260,14 @@ private:
             break;
         case Landing:
             {
-                m_goal.pose.position.z = m_startZ + 0.05;
+		m_goal.pose.position.z -= 0.20 * dt; //m_startZ + 0.1;
                 tf::StampedTransform transform;
 		getTransform(m_worldFrame, m_frame, transform);
                 m_listener.lookupTransform(m_worldFrame, m_frame, ros::Time(0), transform);
                 if (transform.getOrigin().z() <= m_startZ + 0.05) {
                     m_state = Idle;
                     geometry_msgs::Twist msg;
-                    msg.linear.z = 1100;
+		    msg.linear.z = 1100 - m_RC_minThrust;
                     publish_output(msg);
 		    ROS_INFO("I am done landing, going to idle");
                 }
@@ -325,6 +325,7 @@ private:
         case Idle:
             {
                 geometry_msgs::Twist msg;
+		msg.linear.z = 1100 - m_RC_minThrust;
                 publish_output(msg);
             }
             break;
