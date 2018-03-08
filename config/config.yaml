@@ -31,12 +31,21 @@ PIDs:
     maxOutput: 200.0
     integratorMin: 0.0
     integratorMax: 0.0
-Params:
-  RC_minOutput: 1072
-  RC_midOutput: 1496
-  RC_maxOutput: 1920
-  RC_minThrust: 1150
-  RC_midRoll: 1495
-  RC_midPitch: 1495
-  RC_midYaw: 1502
-  RC_step: 50
+RC:
+  roll:
+    min: 1072
+    mid: 1496
+    max: 1920
+  pitch:
+    min: 1072
+    mid: 1496
+    max: 1920
+  yaw:
+    min: 1072
+    mid: 1502
+    max: 1920
+  thrust:
+    min: 1072
+    mid: 1400
+    max: 1920
+    take_off_step: 50
