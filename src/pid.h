@@ -16,6 +16,7 @@ public:
         float maxOutput,
         float integratorMin,
         float integratorMax,
+        float speedThreshold,
         const std::string& name)
         : m_kp(kp)
         , m_kd(kd)
@@ -27,29 +28,40 @@ public:
         , m_integral(0)
         , m_previousError(0)
         , m_i_on_off(true)
+        , m_speedThreshold(speedThreshold)
         , m_previousTime(ros::Time::now()) {
-	ROS_INFO("PID %s initialized with min_op=%f max_op=%f", name.c_str(), m_minOutput, m_maxOutput);
+	ROS_INFO("PID %s initialized with: \n\t\
+                (kp=%f kd=%f ki=%f) \n\t\
+                (minOutput=%f maxOutput=%f) \n\t\
+                (integratorMin=%f integratorMax=%f)"
+                , name.c_str(), m_kp, m_kd, m_ki
+                , m_minOutput, m_maxOutput
+                , m_integratorMin, m_integratorMax);
     }
 
+    /* reset the internal state of PID */
     void reset() {
         m_integral = 0;
         m_previousError = 0;
         m_previousTime = ros::Time::now();
     }
 
+    /* start accumulating integral */
     void enableIntegral(void) {
         m_i_on_off = true;
     }
 
+    /* stop accumulating integral */
     void disableIntegral(void) {
         m_i_on_off = false;
     }
 
+    /* manually set integral for biasing*/
     void setIntegral(float integral) {
         m_integral = integral;
     }
 
-    float getIntegral(void) {
+    float integral(void) {
         return m_integral;;
     }
 
@@ -65,19 +77,25 @@ public:
         return m_kd;
     }
 
+    /* update the output of PID based on updated error and time */
     float update(float value, float targetValue) {
         ros::Time time = ros::Time::now();
         float dt = time.toSec() - m_previousTime.toSec();
         float error = targetValue - value;
-        if (m_i_on_off) {
-            m_integral += error * dt;
-        } else {
-            m_integral = 0;
-        }
         float p = m_kp * error;
         float d = 0;
         if (dt > 0) {
             d = m_kd * (error - m_previousError) / dt;
+        }
+        if (d < m_speedThreshold) {
+            m_i_on_off = true;
+        } else {
+            m_i_on_off = false;
+        }
+        if (m_i_on_off) {
+            m_integral += error * dt;
+        } else {
+            m_integral = 0;
         }
         float i = m_ki * m_integral;
         i = std::max(std::min(i, m_integratorMax), m_integratorMin);
@@ -88,17 +106,18 @@ public:
     }
 
 private:
-    float m_kp;
-    float m_kd;
-    float m_ki;
-    float m_minOutput;
-    float m_maxOutput;
-    float m_integratorMin;
-    float m_integratorMax;
-    float m_integral;
+    float m_kp;         //proportional coefficient
+    float m_kd;         //differential coefficient
+    float m_ki;         //integral coefficient
+    float m_minOutput;      // minimum total output (biased around 0)
+    float m_maxOutput;      // maximum total output (biased around 0)
+    float m_integratorMin;  // minimum integral component (biased around 0)
+    float m_integratorMax;  // maximum integral component (biased around 0)
+    float m_integral;       // integral component uncapped
     float m_previousError;
     ros::Time m_previousTime;
-    bool m_i_on_off;
+    bool m_i_on_off;        // whether integral component should be accounted
+    float m_speedThreshold; // speed under which the integrator works
 };
 
 #endif /* _PID_H_ */

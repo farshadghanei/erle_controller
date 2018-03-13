@@ -7,6 +7,7 @@ PIDs:
     maxOutput: 10.0
     integratorMin: -0.1
     integratorMax: 0.1
+    integratorSpeedThreshold: 0.2
   Y:
     kp: -40.0
     kd: -20.0
@@ -15,6 +16,7 @@ PIDs:
     maxOutput: 10.0
     integratorMin: -0.1
     integratorMax: 0.1
+    integratorSpeedThreshold: 0.2
   Z:
     kp: 100.0
     kd: 150.0
@@ -23,6 +25,7 @@ PIDs:
     maxOutput: 150.0
     integratorMin: -50.0
     integratorMax: 50.0
+    integratorSpeedThreshold: 0.2
   Yaw:
     kp: -200.0
     kd: -20.0
@@ -31,6 +34,7 @@ PIDs:
     maxOutput: 200.0
     integratorMin: 0.0
     integratorMax: 0.0
+    integratorSpeedThreshold: 0.2
 RC:
   roll:
     min: 1072
