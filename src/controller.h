@@ -73,21 +73,24 @@ public:
             get(n, NODE_NAME+"/PIDs/Yaw/integratorMax"),
             get(n, NODE_NAME+"/PIDs/Yaw/integratorSpeedThreshold"),
             "yaw")
-	, m_RC_roll_min(get(n, NODE_NAME+"/RC/roll/min"))
-	, m_RC_roll_mid(get(n, NODE_NAME+"/RC/roll/mid"))
-	, m_RC_roll_max(get(n, NODE_NAME+"/RC/roll/max"))
-	, m_RC_pitch_min(get(n, NODE_NAME+"/RC/pitch/min"))
-	, m_RC_pitch_mid(get(n, NODE_NAME+"/RC/pitch/mid"))
-	, m_RC_pitch_max(get(n, NODE_NAME+"/RC/pitch/max"))
-	, m_RC_yaw_min(get(n, NODE_NAME+"/RC/yaw/min"))
-	, m_RC_yaw_mid(get(n, NODE_NAME+"/RC/yaw/mid"))
-	, m_RC_yaw_max(get(n, NODE_NAME+"/RC/yaw/max"))
-	, m_RC_thrust_min(get(n, NODE_NAME+"/RC/thrust/min"))
-	, m_RC_thrust_mid(get(n, NODE_NAME+"/RC/thrust/mid"))
-	, m_RC_thrust_max(get(n, NODE_NAME+"/RC/thrust/max"))
-	, m_RC_thrust_take_off_step(get(n, NODE_NAME+"/RC/thrust/take_off_step"))
+        , m_RC_roll_min(get(n, NODE_NAME+"/RC/roll/min"))
+        , m_RC_roll_mid(get(n, NODE_NAME+"/RC/roll/mid"))
+        , m_RC_roll_max(get(n, NODE_NAME+"/RC/roll/max"))
+        , m_RC_pitch_min(get(n, NODE_NAME+"/RC/pitch/min"))
+        , m_RC_pitch_mid(get(n, NODE_NAME+"/RC/pitch/mid"))
+        , m_RC_pitch_max(get(n, NODE_NAME+"/RC/pitch/max"))
+        , m_RC_yaw_min(get(n, NODE_NAME+"/RC/yaw/min"))
+        , m_RC_yaw_mid(get(n, NODE_NAME+"/RC/yaw/mid"))
+        , m_RC_yaw_max(get(n, NODE_NAME+"/RC/yaw/max"))
+        , m_RC_thrust_min(get(n, NODE_NAME+"/RC/thrust/min"))
+        , m_RC_thrust_mid(get(n, NODE_NAME+"/RC/thrust/mid"))
+        , m_RC_thrust_max(get(n, NODE_NAME+"/RC/thrust/max"))
+        , m_RC_thrust_take_off_step(get(n, NODE_NAME+"/RC/thrust/take_off_step"))
         , m_state(Idle)
-        , m_goal()
+        , m_pose_worldFrame()
+        , m_goal_worldFrame()
+        , m_goal_bodyFrame()
+        , m_transform()
         , m_subscribeGoal()
         , m_serviceArm()
         , m_serviceDisarm()
@@ -98,10 +101,10 @@ public:
         , m_startZ(0)
     {
         ROS_INFO("controller object created");
-	print_RC_params();
+        print_RC_params();
         ros::NodeHandle nh;
         m_listener.waitForTransform(m_worldFrame, m_frame, ros::Time(0), ros::Duration(10.0)); 
-	ROS_INFO("transform_listener result: %s",m_listener.allFramesAsString().c_str());
+        ROS_INFO("transform_listener result: %s",m_listener.allFramesAsString().c_str());
         m_pubRC = nh.advertise<mavros_msgs::OverrideRCIn>("mavros/rc/override",10);
         m_subscribeGoal = nh.subscribe("erle/goal", 1, &Controller::goalChanged, this);
         m_serviceTakeoff = nh.advertiseService("erle/takeoff", &Controller::takeoff, this);
@@ -114,7 +117,7 @@ public:
         m_rc_override.channels[0] = m_RC_pitch_mid;
         m_rc_override.channels[2] = m_RC_thrust_min;
 
-        rc_out();	
+        rc_out();   
     }
 
     void run(double frequency)
@@ -122,7 +125,7 @@ public:
         ros::NodeHandle node;
         ros::Timer timer = node.createTimer(ros::Duration(1.0/frequency), &Controller::iteration, this);
         while(ros::ok()) {
-	    ros::spinOnce();
+        ros::spinOnce();
         }
     }
 
@@ -130,8 +133,8 @@ private:
     /* abstraction for publishing the output */
     void publish_output(geometry_msgs::Twist msg) {
         //if (msg.linear.x + msg.linear.y + msg.linear.z + msg.angular.z > 0.0001) {
-	//	ROS_INFO("Controller values (x,y,z,Yaw): (%f,%f,%f,%f)",msg.linear.x, msg.linear.y, msg.linear.z, msg.angular.z);
-	//}
+    //  ROS_INFO("Controller values (x,y,z,Yaw): (%f,%f,%f,%f)",msg.linear.x, msg.linear.y, msg.linear.z, msg.angular.z);
+    //}
         //rc_override.channels[0] = m_RC_midRoll + msg.linear.x;
         //rc_override.channels[1] = m_RC_midPitch + msg.linear.y;
         m_rc_override.channels[2] = m_RC_thrust_min + msg.linear.z;
@@ -142,11 +145,11 @@ private:
     /* setting hover/goal position  manually */
     bool set_goal_height(
             std_srvs::Empty::Request& req,
-            std_srvs::Empty::Request& res)
-    {
-        m_goal.pose.position.z = 1;
-        m_goal.pose.orientation.w = 1.0;
-        ROS_INFO("set_goal_height requested. setting it to %f", m_goal.pose.position.z);
+            std_srvs::Empty::Request& res) {
+
+        m_goal_worldFrame.pose.position.z = 1;
+        m_goal_worldFrame.pose.orientation.w = 1.0;
+        ROS_INFO("set_goal_height requested. setting it to %f", m_goal_worldFrame.pose.position.z);
         return true;
     }
     void goalChanged(
@@ -162,7 +165,7 @@ private:
             msg->pose.orientation.y, 
             msg->pose.orientation.z, 
             msg->pose.orientation.w);
-        m_goal = *msg;
+        m_goal_worldFrame = *msg;
     }
 
     /* arm ErleCopter */
@@ -170,14 +173,21 @@ private:
         std_srvs::Empty::Request& req,
         std_srvs::Empty::Response& res) {
 
-        ROS_INFO("Arm requested...");
-        mavros_msgs::CommandBool armValue;
-        armValue.request.value = true;
-	    bool response = true;
-        if (ros::service::call("/mavros/cmd/arming", armValue)) {
-            ROS_INFO("send armValue successful.");
+        bool response;
+        if (m_state==Idle) {
+            ROS_INFO("Arm requested...");
+            mavros_msgs::CommandBool armValue;
+            armValue.request.value = true;
+            if (ros::service::call("/mavros/cmd/arming", armValue)) {
+                ROS_INFO("send armValue successful.");
+                response = true;
+                m_state = Armed;
+            } else {
+                ROS_INFO("send armValue failed");
+                response = false;
+            }
         } else {
-            ROS_INFO("send armValue failed");
+            ROS_INFO("state is not idle, cannot call arm.");
             response = false;
         }
         return response;
@@ -188,20 +198,27 @@ private:
         std_srvs::Empty::Request& req,
         std_srvs::Empty::Response& res) {
 
-        ROS_INFO("Disarm requested...");
-        mavros_msgs::CommandBool armValue;
-        armValue.request.value = false;
-	bool response = true;
-        if (ros::service::call("/mavros/cmd/arming", armValue)) {
-            ROS_INFO("send disarmValue successful.");
+        bool response;
+        if (m_state == Armed) {
+            ROS_INFO("Disarm requested...");
+            mavros_msgs::CommandBool armValue;
+            armValue.request.value = false;
+            if (ros::service::call("/mavros/cmd/arming", armValue)) {
+                ROS_INFO("send disarmValue successful.");
+                response = true;
+                m_state = Idle;
+            } else {
+                ROS_INFO("send disarmValue failed");
+                response = false;
+            }
         } else {
-            ROS_INFO("send disarmValue failed");
+            ROS_INFO("state is not armed, cannot call disarm.");
             response = false;
         }
         return response;
     }
 
-    /* disarm ErleCopter */
+    /* stop and disarm ErleCopter giving control to RC*/
     bool stop(
         std_srvs::Empty::Request& req,
         std_srvs::Empty::Response& res) {
@@ -210,17 +227,17 @@ private:
 
         ROS_INFO("Stop requested...");
 
-	    ROS_INFO("rollback RC channels!");
-	    // all sticks in the middle, thrust to minimum
-	    m_rc_override.channels[0]=m_RC_roll_mid;
-    	m_rc_override.channels[1]=m_RC_pitch_mid;
-    	m_rc_override.channels[2]=m_RC_thrust_min;
-    	m_rc_override.channels[3]=m_RC_yaw_mid;
-    	rc_out();
+        ROS_INFO("rollback RC channels!");
+        // all sticks in the middle, thrust to minimum
+        m_rc_override.channels[0]=m_RC_roll_mid;
+        m_rc_override.channels[1]=m_RC_pitch_mid;
+        m_rc_override.channels[2]=m_RC_thrust_min;
+        m_rc_override.channels[3]=m_RC_yaw_mid;
+        rc_out();
 
-	    release_channels(0xFF);
-	    rc_out();
-	    //response = disarm();
+        release_channels(0xFF);
+        rc_out();
+        //response = disarm();
 
         return response;
     }
@@ -247,18 +264,21 @@ private:
         std_srvs::Empty::Request& req,
         std_srvs::Empty::Response& res) {
 
-        ROS_INFO("Takeoff requested!");
-        m_state = TakingOff;
-	
-	m_goal.pose.position.z = 2.0;
-        m_goal.pose.orientation.w = 1.0;
-        tf::StampedTransform transform;
-	getTransform(m_worldFrame, m_frame, transform);
-        m_listener.lookupTransform(m_worldFrame, m_frame, ros::Time(0), transform);
-        m_startZ = transform.getOrigin().z();
-        ROS_INFO("the original height is: %f", m_startZ);
-
-        return true;
+        bool response;
+        if (m_state == Armed) {
+            ROS_INFO("Takeoff requested...");
+            
+            m_goal_worldFrame.pose.position.z = 2.0;
+            m_goal_worldFrame.pose.orientation.w = 1.0;
+            m_startZ = m_transform.getOrigin().z();
+            ROS_INFO("the original height is: %f", m_startZ);
+            m_state = TakingOff;
+            response = true;
+        } else {
+            ROS_INFO("state is not armed, cannot call takeoff.");
+            response = false;
+        }
+        return response;
     }
 
     /* landing service */
@@ -272,14 +292,16 @@ private:
         return true;
     }
 
-    /* obtaining the transform */
-    void getTransform(
-        const std::string& sourceFrame,
-        const std::string& targetFrame,
-        tf::StampedTransform& result)
-    {
-	//ROS_INFO("getTransform: from \"%s\" to \"%s\" frame.",	sourceFrame.c_str(), targetFrame.c_str());	
-        m_listener.lookupTransform(sourceFrame, targetFrame, ros::Time(0), result);
+    /* updating the local transform values */
+    void updateTransform(void) {
+        m_listener.lookupTransform(m_worldFrame, m_frame, ros::Time(0), m_transform);
+        m_pose_worldFrame.pose.position = m_transform.getOrigin();
+        m_pose_worldFrame.pose.orientation = m_transform.getRotation();
+
+        m_goal_worldFrame.header.stamp = m_transform.stamp_;
+        m_goal_worldFrame.header.frame_id = m_worldFrame;
+        m_listener.transformPose(m_frame, m_goal_worldFrame, m_goal_bodyFrame);
+        //ROS_INFO("updated transform:");  
     }
 
     void pidReset()
@@ -293,33 +315,32 @@ private:
     /* repeating each dt */
     void iteration(const ros::TimerEvent& e)
     {
-	if (!ros::ok()) {
+    if (!ros::ok()) {
         release_channels(0xFF);
-		ros::shutdown();
-	}
+        ros::shutdown();
+    }
 //        ROS_INFO("entered iteration at time: %f", e.current_real.toSec());
         float dt = e.current_real.toSec() - e.last_real.toSec();
+
+        updateTransform();
 
         switch(m_state) {
             case Armed:
             {
                 geometry_msgs::Twist msg;
-		        msg.linear.z = 100;     //just a little thrust to prevent disarming
+                msg.linear.z = 100;     //just a little thrust to prevent disarming
                 publish_output(msg);
             }
             break;
             case TakingOff: 
             {
-                tf::StampedTransform transform;
-		        getTransform(m_worldFrame, m_frame, transform);
-                m_listener.lookupTransform(m_worldFrame, m_frame, ros::Time(0), transform);
-                if (transform.getOrigin().z() > m_startZ + 0.15 || m_thrust > m_RC_thrust_max - m_RC_thrust_min) {
+                if (m_pose_worldFrame.pose.position.z > m_startZ + 0.15 || m_thrust > m_RC_thrust_max - m_RC_thrust_min) {
                     pidReset();
-		            // ROS_INFO("Value of m_pidZ.ki = %f",m_pidZ.ki());
-		            m_RC_thrust_min = 1400; // += m_thrust;
+                    // ROS_INFO("Value of m_pidZ.ki = %f",m_pidZ.ki());
+                    m_RC_thrust_min = 1400; // += m_thrust;
                     m_pidZ.setIntegral(0);//m_thrust / m_pidZ.ki());
                     m_state = Automatic;
-                    ROS_INFO("Shifting to automatic mode, m_thrust=%f, current_z=%f", m_thrust, transform.getOrigin().z());
+                    ROS_INFO("Shifting to automatic mode, m_thrust=%f, current_z=%f", m_thrust, m_transform.getOrigin().z());
                     m_thrust = 0;
                 } else {
                     m_thrust += m_RC_thrust_take_off_step * dt;
@@ -332,64 +353,45 @@ private:
             break;
             case Landing:
             {
-	        	m_goal.pose.position.z -= 0.20 * dt; //m_startZ + 0.1;
-                tf::StampedTransform transform;
-        		getTransform(m_worldFrame, m_frame, transform);
-                m_listener.lookupTransform(m_worldFrame, m_frame, ros::Time(0), transform);
-                if (transform.getOrigin().z() <= m_startZ + 0.05) {
+                m_goal_worldFrame.pose.position.z -= 0.20 * dt; //m_startZ + 0.1;
+                if (m_pose_worldFrame.pose.position.z <= m_startZ + 0.05) {
                     m_state = Idle;
                     geometry_msgs::Twist msg;
-	        	    msg.linear.z = 1100 - m_RC_thrust_min;
+                    msg.linear.z = 1100 - m_RC_thrust_min;
                     publish_output(msg);
-        		    ROS_INFO("I am done landing, going to idle");
+                    ROS_INFO("I am done landing, going to idle");
                 }
             }
             // intentional fall-thru
             case Automatic:
             {
-                tf::StampedTransform transform;
-	        	getTransform(m_worldFrame, m_frame, transform);
-                m_listener.lookupTransform(m_worldFrame, m_frame, ros::Time(0), transform);
-
-                geometry_msgs::PoseStamped targetWorld;
-                targetWorld.header.stamp = transform.stamp_;
-                targetWorld.header.frame_id = m_worldFrame;
-                targetWorld.pose = m_goal.pose;
-        		if (iterationCounter==0) {
-		        	//ROS_INFO("targetWorld");
-    	    		//ROS_INFO("%f, %f, %f",targetWorld.pose.position.x, targetWorld.pose.position.y, targetWorld.pose.position.z);
-        			//ROS_INFO("%f, %f, %f, %f",targetWorld.pose.orientation.x, targetWorld.pose.orientation.y, 
-        			//	targetWorld.pose.orientation.z,targetWorld.pose.orientation.w);
-	        	}
-                geometry_msgs::PoseStamped targetDrone;
-                m_listener.transformPose(m_frame, targetWorld, targetDrone);
-        		if (iterationCounter==0) {
-        			ROS_INFO("Relative target: %f", targetDrone.pose.position.z);
-		        	//ROS_INFO("targetDrone");
-        			//ROS_INFO("%f, %f, %f",targetDrone.pose.position.x, targetDrone.pose.position.y, targetDrone.pose.position.z);
-        			//ROS_INFO("%f, %f, %f, %f",targetDrone.pose.orientation.x, targetDrone.pose.orientation.y, 
-        			//	targetDrone.pose.orientation.z,targetDrone.pose.orientation.w);
-        		}
+                if (iterationCounter==0) {
+                    ROS_INFO("Relative target: %f", m_goal_bodyFrame.pose.position.z);
+                    //ROS_INFO("targetDrone");
+                    //ROS_INFO("%f, %f, %f",targetDrone.pose.position.x, targetDrone.pose.position.y, targetDrone.pose.position.z);
+                    //ROS_INFO("%f, %f, %f, %f",targetDrone.pose.orientation.x, targetDrone.pose.orientation.y, 
+                    //  targetDrone.pose.orientation.z,targetDrone.pose.orientation.w);
+                }
                 tfScalar roll, pitch, yaw;
                 tf::Matrix3x3(
                     tf::Quaternion(
-                        targetDrone.pose.orientation.x,
-                        targetDrone.pose.orientation.y,
-                        targetDrone.pose.orientation.z,
-                        targetDrone.pose.orientation.w
+                        m_goal_bodyFrame.pose.orientation.x,
+                        m_goal_bodyFrame.pose.orientation.y,
+                        m_goal_bodyFrame.pose.orientation.z,
+                        m_goal_bodyFrame.pose.orientation.w
                     )).getRPY(roll, pitch, yaw);
-		
+        
                 geometry_msgs::Twist msg;
                 //msg.linear.x = m_pidX.update(0.0, targetDrone.pose.position.x);
                 //msg.linear.y = m_pidY.update(0.0, targetDrone.pose.position.y);
-                msg.linear.z = m_pidZ.update(0.0, targetDrone.pose.position.z);
+                msg.linear.z = m_pidZ.update(0.0, m_goal_bodyFrame.pose.position.z);
                 //msg.angular.z = m_pidYaw.update(0.0, yaw);
                 if (iterationCounter==0) {
-        			//ROS_INFO("Target Roll, Pitch, Yaw: (%f,%f,%f)", roll, pitch, yaw);
-        			//ROS_INFO("m_pidX, m_pidY, m_pidZ, m_pidYaw: (%f,%f,%f, %f)", 
-        			//	msg.linear.x, msg.linear.y, msg.linear.z, msg.angular.z);
-        			ROS_INFO("m_pidZ=%f",msg.linear.z);
-        		}
+                    //ROS_INFO("Target Roll, Pitch, Yaw: (%f,%f,%f)", roll, pitch, yaw);
+                    //ROS_INFO("m_pidX, m_pidY, m_pidZ, m_pidYaw: (%f,%f,%f, %f)", 
+                    //  msg.linear.x, msg.linear.y, msg.linear.z, msg.angular.z);
+                    ROS_INFO("m_pidZ=%f",msg.linear.z);
+                }
                 publish_output(msg);
             }
             break;
@@ -398,11 +400,11 @@ private:
             }
             break;
         }
-    	if (iterationCounter++ > 100) {
-	    	//ROS_INFO("Controller values (x,y,z,Yaw): (%d,%d,%d,%d)", rc_override.channels[0], rc_override.channels[1], rc_override.channels[2], rc_override.channels[3]);
-    		ROS_INFO("RC_override: %d",m_rc_override.channels[2]);
-    		iterationCounter=0;
-    	}
+        if (iterationCounter++ > 100) {
+            //ROS_INFO("Controller values (x,y,z,Yaw): (%d,%d,%d,%d)", rc_override.channels[0], rc_override.channels[1], rc_override.channels[2], rc_override.channels[3]);
+            ROS_INFO("RC_override: %d",m_rc_override.channels[2]);
+            iterationCounter=0;
+        }
         rc_out();
     }
 
@@ -427,7 +429,10 @@ private:
     PID m_pidZ;
     PID m_pidYaw;
     State m_state;
-    geometry_msgs::PoseStamped m_goal;
+    geometry_msgs::PoseStamped m_pose_worldFrame;
+    geometry_msgs::PoseStamped m_goal_worldFrame;
+    geometry_msgs::PoseStamped m_goal_bodyFrame;
+    tf::StampedTransform m_transform;
     mavros_msgs::OverrideRCIn m_rc_override;
     ros::Subscriber m_subscribeGoal;
     ros::ServiceServer m_serviceTakeoff;
