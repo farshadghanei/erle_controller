@@ -24,6 +24,23 @@ double get(
 /***** Controller Class ******/
 class Controller
 {
+private:
+    enum State {
+        Idle = 0,
+        Automatic = 1,
+        TakingOff = 2,
+        Landing = 3,
+        Armed = 4,
+    };
+
+private:
+    enum Channel {
+        Roll = 0,
+        Pitch = 1,
+        Thrust = 2,
+        Yaw = 3,
+    };
+
 public:
     /* Constructor with initialization */
     Controller(
@@ -85,7 +102,12 @@ public:
         , m_RC_thrust_min(get(n, NODE_NAME+"/RC/thrust/min"))
         , m_RC_thrust_mid(get(n, NODE_NAME+"/RC/thrust/mid"))
         , m_RC_thrust_max(get(n, NODE_NAME+"/RC/thrust/max"))
-        , m_RC_thrust_take_off_step(get(n, NODE_NAME+"/RC/thrust/take_off_step"))
+        , m_takeoff_thrustStep(get(n, NODE_NAME+"/Takeoff/thrustStep"))
+        , m_takeoff_targetHeight(get(n, NODE_NAME+"/Takeoff/targetHeight"))
+        , m_takeoff_liftThreshold(get(n, NODE_NAME+"/Takeoff/liftThreshold"))
+        , m_landing_thrustStep(get(n, NODE_NAME+"/Landing/thrustStep"))
+        , m_landing_targetHeight(get(n, NODE_NAME+"/Landing/targetHeight"))
+        , m_landing_declineSpeed(get(n, NODE_NAME+"/Landing/ldeclineSpeed"))
         , m_state(Idle)
         , m_pose_worldFrame()
         , m_goal_worldFrame()
@@ -97,7 +119,6 @@ public:
         , m_serviceTakeoff()
         , m_serviceLand()
         , m_serviceStop()
-        , m_thrust(0)
         , m_startZ(0)
     {
         ROS_INFO("controller object created");
@@ -114,8 +135,7 @@ public:
         m_serviceStop = nh.advertiseService("erle/stop", &Controller::stop, this);
         ROS_INFO("Services advertised: erle/arm, disarm, takeoff, land, stop");
 
-        m_rc_override.channels[0] = m_RC_pitch_mid;
-        m_rc_override.channels[2] = m_RC_thrust_min;
+        m_goal_worldFrame.pose.orientation.w = 1.0; //TODO needs to go
 
         rc_out();   
     }
@@ -131,15 +151,23 @@ public:
 
 private:
     /* abstraction for publishing the output */
-    void publish_output(geometry_msgs::Twist msg) {
-        //if (msg.linear.x + msg.linear.y + msg.linear.z + msg.angular.z > 0.0001) {
+    void rc_biasedOutput(geometry_msgs::Twist msg) {
+    //if (msg.linear.x + msg.linear.y + msg.linear.z + msg.angular.z > 0.0001) {
     //  ROS_INFO("Controller values (x,y,z,Yaw): (%f,%f,%f,%f)",msg.linear.x, msg.linear.y, msg.linear.z, msg.angular.z);
     //}
         //rc_override.channels[0] = m_RC_midRoll + msg.linear.x;
         //rc_override.channels[1] = m_RC_midPitch + msg.linear.y;
-        m_rc_override.channels[2] = m_RC_thrust_min + msg.linear.z;
+        //m_rc_override.channels[2] = m_RC_thrust_min + msg.linear.z;
         //rc_override.channels[3] = m_RC_midYaw + msg.angular.z;
-        rc_out();
+        /* we only set channels if PID value is non-zero, 
+           otherwise we will keep it as is 
+           the values are biased around MID values for channels.
+           but if PID is zero, we don't want to force MID value.
+        */
+        if (msg.linear.y != 0)
+            rc_setChannel(Roll, m_RC_roll_mid + msg.linear.y);
+        if (msg.linear.z != 0)
+            rc_setChannel(Thrust, m_RC_thrust_mid + msg.linear.z);
     }
 
     /* setting hover/goal position  manually */
@@ -175,13 +203,14 @@ private:
 
         bool response;
         if (m_state==Idle) {
+            //TODO need to verify/change flight mode
             ROS_INFO("Arm requested...");
             mavros_msgs::CommandBool armValue;
             armValue.request.value = true;
             if (ros::service::call("/mavros/cmd/arming", armValue)) {
                 ROS_INFO("send armValue successful.");
                 response = true;
-                m_state = Armed;
+                m_state = Armed;                
             } else {
                 ROS_INFO("send armValue failed");
                 response = false;
@@ -199,8 +228,9 @@ private:
         std_srvs::Empty::Response& res) {
 
         bool response;
-        if (m_state == Armed) {
+        if (m_state == Armed || m_state == TakingOff || m_state == Automatic) {
             ROS_INFO("Disarm requested...");
+            rc_rollbackChannels();
             mavros_msgs::CommandBool armValue;
             armValue.request.value = false;
             if (ros::service::call("/mavros/cmd/arming", armValue)) {
@@ -218,28 +248,34 @@ private:
         return response;
     }
 
-    /* stop and disarm ErleCopter giving control to RC*/
+    /* stop and disarm ErleCopter giving control to RC, returns disarm response*/
     bool stop(
         std_srvs::Empty::Request& req,
         std_srvs::Empty::Response& res) {
 
-        bool response = true;
+        bool response;
 
-        ROS_INFO("Stop requested...");
+        ROS_INFO("Stop requested!!!");
 
-        ROS_INFO("rollback RC channels!");
-        // all sticks in the middle, thrust to minimum
-        m_rc_override.channels[0]=m_RC_roll_mid;
-        m_rc_override.channels[1]=m_RC_pitch_mid;
-        m_rc_override.channels[2]=m_RC_thrust_min;
-        m_rc_override.channels[3]=m_RC_yaw_mid;
-        rc_out();
+        // force rc_rollback and disarming, no matter how disarim() is implemented
+        rc_rollbackChannels();
+        mavros_msgs::CommandBool armValue;
+        armValue.request.value = false;
+        response = ros::service::call("/mavros/cmd/arming", armValue);
 
-        release_channels(0xFF);
-        rc_out();
-        //response = disarm();
+        m_state = Idle; //force going to idle;
 
         return response;
+    }
+
+    /* Setting value for one of 4 RC channels, need to call rc_out afterwards */
+    void rc_setChannel(Channel channel, int value) {
+	m_rc_override.channels[channel]=value;
+    }
+
+    /* Returning the value for one of 4 RC channels */
+    int rc_getChannel(Channel channel) {
+	return m_rc_override.channels[channel];
     }
 
     /* publishing the RC values to override topic */    
@@ -247,11 +283,25 @@ private:
         m_pubRC.publish(m_rc_override);
     }
 
+    /* 
+        all sticks in the middle, thrust to minimum.
+        this is specified, in case of no RC, these will be last values.
+    */          
+    void rc_rollbackChannels(void) {
+        ROS_INFO("rollback RC channels!");
+        rc_setChannel(Roll, m_RC_roll_mid);
+        rc_setChannel(Pitch, m_RC_pitch_mid);
+        rc_setChannel(Yaw, m_RC_yaw_mid);
+        rc_setChannel(Thrust, m_RC_thrust_min);
+        rc_out();
+    }
+
     /* release override of channels back to the RC, 
      use flags to indicate which channels, rest will be untouched */
-    void release_channels(int flags) {
+    void rc_releaseChannels(int flags) {
         for (int i=0;i<8;i++) {
             if (flags & 1) {
+                 ROS_INFO("Releasing channel %d ...",i);
                  m_rc_override.channels[i] = 0;
             }
             flags >> 1;
@@ -268,10 +318,18 @@ private:
         if (m_state == Armed) {
             ROS_INFO("Takeoff requested...");
             
-            m_goal_worldFrame.pose.position.z = 2.0;
-            m_goal_worldFrame.pose.orientation.w = 1.0;
-            m_startZ = m_transform.getOrigin().z();
-            ROS_INFO("the original height is: %f", m_startZ);
+            m_goal_worldFrame.pose.position = m_pose_worldFrame.pose.position;
+            m_goal_worldFrame.pose.orientation = m_pose_worldFrame.pose.orientation;
+            m_goal_worldFrame.pose.position.z = m_takeoff_targetHeight;
+            m_startZ = m_pose_worldFrame.pose.position.z;
+            ROS_INFO("The original position is: (%4.2f, %4.2f, %4.2f)", 
+                       m_pose_worldFrame.pose.position.x, 
+                       m_pose_worldFrame.pose.position.y, 
+                       m_pose_worldFrame.pose.position.z);
+            ROS_INFO("The goal for takeoff is : (%4.2f, %4.2f, %4.2f)",
+                       m_goal_worldFrame.pose.position.x, 
+                       m_goal_worldFrame.pose.position.y, 
+                       m_goal_worldFrame.pose.position.z);
             m_state = TakingOff;
             response = true;
         } else {
@@ -286,17 +344,35 @@ private:
         std_srvs::Empty::Request& req,
         std_srvs::Empty::Response& res)
     {
-        ROS_INFO("Landing requested!");
-        m_state = Landing;
 
-        return true;
+        bool response;
+        if (m_state == TakingOff || m_state == Automatic) {
+            ROS_INFO("Landing requested...");
+            
+            m_goal_worldFrame.pose.position = m_pose_worldFrame.pose.position;
+            m_goal_worldFrame.pose.orientation = m_pose_worldFrame.pose.orientation;
+
+            m_state = Landing;
+            response = true;
+        } else {
+            ROS_INFO("state is not ready for landing!");
+            response = false;
+        }
+        return response;
     }
 
     /* updating the local transform values */
     void updateTransform(void) {
         m_listener.lookupTransform(m_worldFrame, m_frame, ros::Time(0), m_transform);
-        m_pose_worldFrame.pose.position = m_transform.getOrigin();
-        m_pose_worldFrame.pose.orientation = m_transform.getRotation();
+        tf::Vector3 origin = m_transform.getOrigin();
+        m_pose_worldFrame.pose.position.x = origin.x();
+        m_pose_worldFrame.pose.position.y = origin.y();
+        m_pose_worldFrame.pose.position.z = origin.z();
+        tf::Quaternion orientation = m_transform.getRotation();
+        m_pose_worldFrame.pose.orientation.x = orientation.x();
+        m_pose_worldFrame.pose.orientation.y = orientation.y();
+        m_pose_worldFrame.pose.orientation.z = orientation.z();
+        m_pose_worldFrame.pose.orientation.w = orientation.w();
 
         m_goal_worldFrame.header.stamp = m_transform.stamp_;
         m_goal_worldFrame.header.frame_id = m_worldFrame;
@@ -315,11 +391,10 @@ private:
     /* repeating each dt */
     void iteration(const ros::TimerEvent& e)
     {
-    if (!ros::ok()) {
-        release_channels(0xFF);
-        ros::shutdown();
-    }
-//        ROS_INFO("entered iteration at time: %f", e.current_real.toSec());
+        if (!ros::ok()) {
+            rc_releaseChannels(0xFF);
+            ros::shutdown();
+        }
         float dt = e.current_real.toSec() - e.last_real.toSec();
 
         updateTransform();
@@ -327,39 +402,46 @@ private:
         switch(m_state) {
             case Armed:
             {
-                geometry_msgs::Twist msg;
-                msg.linear.z = 100;     //just a little thrust to prevent disarming
-                publish_output(msg);
+                rc_setChannel(Roll, m_RC_roll_mid);
+                rc_setChannel(Thrust, m_RC_thrust_min + 50); // prevent autodisarm
             }
             break;
             case TakingOff: 
             {
-                if (m_pose_worldFrame.pose.position.z > m_startZ + 0.15 || m_thrust > m_RC_thrust_max - m_RC_thrust_min) {
-                    pidReset();
-                    // ROS_INFO("Value of m_pidZ.ki = %f",m_pidZ.ki());
-                    m_RC_thrust_min = 1400; // += m_thrust;
-                    m_pidZ.setIntegral(0);//m_thrust / m_pidZ.ki());
-                    m_state = Automatic;
-                    ROS_INFO("Shifting to automatic mode, m_thrust=%f, current_z=%f", m_thrust, m_transform.getOrigin().z());
-                    m_thrust = 0;
+                if (rc_getChannel(Thrust) < m_RC_thrust_max) {
+                    if (m_pose_worldFrame.pose.position.z < m_startZ + m_takeoff_liftThreshold) {
+                        rc_setChannel(Thrust, rc_getChannel(Thrust) + m_takeoff_thrustStep * dt);
+                        rc_setChannel(Roll, m_RC_roll_mid);
+                    } else {
+                        /* takeoff is over, shifting to automatic */
+                        pidReset();
+                        ROS_INFO("Shifting to automatic mode..., current_z=%f", m_pose_worldFrame.pose.position.z);
+                        m_state = Automatic;
+                    }
                 } else {
-                    m_thrust += m_RC_thrust_take_off_step * dt;
-                    geometry_msgs::Twist msg;
-                    msg.linear.z = m_thrust;
-                    publish_output(msg);
+                    /* Full thrust but no lift? Any issue? */
+                    ROS_INFO("Haven't lifted yet? Possible problems: no propeller, crash, etc.");
+                    ROS_INFO("Changing state to Armed, then try to Disarm...");
+                    std_srvs::Empty::Request dummy_req;
+                    std_srvs::Empty::Response dummy_res;
+                    m_state = Armed;
+                    disarm(dummy_req, dummy_res);
                 }
-
             }
             break;
             case Landing:
             {
-                m_goal_worldFrame.pose.position.z -= 0.20 * dt; //m_startZ + 0.1;
-                if (m_pose_worldFrame.pose.position.z <= m_startZ + 0.05) {
-                    m_state = Idle;
-                    geometry_msgs::Twist msg;
-                    msg.linear.z = 1100 - m_RC_thrust_min;
-                    publish_output(msg);
-                    ROS_INFO("I am done landing, going to idle");
+                if (rc_getChannel(Thrust) > m_RC_thrust_min) {
+                    if (m_pose_worldFrame.pose.position.z > m_landing_targetHeight) {
+                        m_goal_worldFrame.pose.position.z -= m_landing_declineSpeed * dt;
+                    } else {
+                        rc_setChannel(Thrust, rc_getChannel(Thrust) - m_landing_thrustStep * dt);
+                    }
+                } else {
+                    /* Landed? or Any issue? */
+                    ROS_INFO("Landing procedure finished. Changing state to Armed");
+                    ROS_INFO("Haven't landed yet? Possible problems: wrong height, crash, etc., call Disarm or Stop");
+                    m_state = Armed;
                 }
             }
             // intentional fall-thru
@@ -382,42 +464,35 @@ private:
                     )).getRPY(roll, pitch, yaw);
         
                 geometry_msgs::Twist msg;
-                //msg.linear.x = m_pidX.update(0.0, targetDrone.pose.position.x);
-                //msg.linear.y = m_pidY.update(0.0, targetDrone.pose.position.y);
-                msg.linear.z = m_pidZ.update(0.0, m_goal_bodyFrame.pose.position.z);
                 //msg.angular.z = m_pidYaw.update(0.0, yaw);
+                //msg.linear.x = m_pidX.update(0.0, targetDrone.pose.position.x);
+                msg.linear.y = m_pidY.update(0.0, m_goal_bodyFrame.pose.position.y);
+                if (m_state != Landing) {
+                    msg.linear.z = m_pidZ.update(0.0, m_goal_bodyFrame.pose.position.z);
+                }
                 if (iterationCounter==0) {
                     //ROS_INFO("Target Roll, Pitch, Yaw: (%f,%f,%f)", roll, pitch, yaw);
                     //ROS_INFO("m_pidX, m_pidY, m_pidZ, m_pidYaw: (%f,%f,%f, %f)", 
                     //  msg.linear.x, msg.linear.y, msg.linear.z, msg.angular.z);
+                    ROS_INFO("m_pidY=%f",msg.linear.y);
                     ROS_INFO("m_pidZ=%f",msg.linear.z);
                 }
-                publish_output(msg);
+                rc_biasedOutput(msg);
             }
             break;
             case Idle:
             {
+		rc_releaseChannels(0xFF);
             }
             break;
         }
         if (iterationCounter++ > 100) {
             //ROS_INFO("Controller values (x,y,z,Yaw): (%d,%d,%d,%d)", rc_override.channels[0], rc_override.channels[1], rc_override.channels[2], rc_override.channels[3]);
-            ROS_INFO("RC_override: %d",m_rc_override.channels[2]);
+            ROS_INFO("RC_override: (%d, *, *, %d)", rc_getChannel(Roll), rc_getChannel(Thrust));
             iterationCounter=0;
         }
         rc_out();
     }
-
-private:
-
-    enum State
-    {
-        Idle = 0,
-        Automatic = 1,
-        TakingOff = 2,
-        Landing = 3,
-        Armed = 4,
-    };
 
 private:
     std::string m_worldFrame;
@@ -440,7 +515,6 @@ private:
     ros::ServiceServer m_serviceArm;
     ros::ServiceServer m_serviceDisarm;
     ros::ServiceServer m_serviceStop;
-    float m_thrust;
     float m_startZ;
     int iterationCounter;
     float m_RC_roll_min;
@@ -455,7 +529,12 @@ private:
     float m_RC_thrust_min;
     float m_RC_thrust_mid;
     float m_RC_thrust_max;
-    float m_RC_thrust_take_off_step;
+    float m_takeoff_thrustStep;
+    float m_takeoff_targetHeight;
+    float m_takeoff_liftThreshold;
+    float m_landing_thrustStep;
+    float m_landing_targetHeight;
+    float m_landing_declineSpeed;
 
 /* just printing all parameters */
     void print_RC_params(void) {
@@ -472,7 +551,6 @@ private:
 \tm_RC_thrust_min=%f\n\
 \tm_RC_thrust_mid=%f\n\
 \tm_RC_thrust_max=%f\n\
-\tm_RC_thrust_take_off_step=%f\n\
 ", 
      m_RC_roll_min,
      m_RC_roll_mid,
@@ -485,8 +563,7 @@ private:
      m_RC_yaw_max,
      m_RC_thrust_min,
      m_RC_thrust_mid,
-     m_RC_thrust_max,
-     m_RC_thrust_take_off_step);
+     m_RC_thrust_max);
     }
 
 };

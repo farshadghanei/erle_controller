@@ -52,4 +52,11 @@ RC:
     min: 1072
     mid: 1400
     max: 1920
-    take_off_step: 50
+Takeoff:
+    thrustStep: 50
+    targetHeight: 2.0
+    liftThreshold: 0.20
+Landing:
+    thrustStep: 50
+    targetHeight: 0.20
+    declineSpeed: 0.20
