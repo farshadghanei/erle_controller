@@ -3,10 +3,10 @@ PIDs:
     kp: 40.0
     kd: 20.0
     ki: 2.0
-    minOutput: -10.0
-    maxOutput: 10.0
-    integratorMin: -0.1
-    integratorMax: 0.1
+    minOutput: -100.0
+    maxOutput: 100.0
+    integratorMin: -20.0
+    integratorMax: 20.0
     integratorSpeedThreshold: 0.2
   Y:
     kp: -40.0
@@ -49,7 +49,7 @@ RC:
     mid: 1502
     max: 1920
   thrust:
-    min: 1072
+    min: 1070
     mid: 1400
     max: 1920
 Takeoff:

@@ -177,7 +177,7 @@ private:
 
         m_goal_worldFrame.pose.position.z = 1;
         m_goal_worldFrame.pose.orientation.w = 1.0;
-        ROS_INFO("set_goal_height requested. setting it to %f", m_goal_worldFrame.pose.position.z);
+        ROS_INFO("set_goal_height requested. setting it to %.2f", m_goal_worldFrame.pose.position.z);
         return true;
     }
     void goalChanged(
@@ -231,11 +231,18 @@ private:
         if (m_state == Armed || m_state == TakingOff || m_state == Automatic) {
             ROS_INFO("Disarm requested...");
             rc_rollbackChannels();
+            //put stick to disarm position
+            rc_setChannel(Yaw, m_RC_yaw_min);
+            rc_out();
+            //ros::Duration(0.05).sleep();
+            rc_out();
             mavros_msgs::CommandBool armValue;
             armValue.request.value = false;
+            //TODO disarming returns successful even if not disarmed. we have to get arm status.
             if (ros::service::call("/mavros/cmd/arming", armValue)) {
                 ROS_INFO("send disarmValue successful.");
                 response = true;
+                rc_releaseChannels(0xFF);
                 m_state = Idle;
             } else {
                 ROS_INFO("send disarmValue failed");
@@ -259,10 +266,16 @@ private:
 
         // force rc_rollback and disarming, no matter how disarim() is implemented
         rc_rollbackChannels();
+        //put stick to disarm position
+        rc_setChannel(Yaw, m_RC_yaw_min);
+        rc_out();
+        //ros::Duration(0.05).sleep();
+        rc_out();
         mavros_msgs::CommandBool armValue;
         armValue.request.value = false;
         response = ros::service::call("/mavros/cmd/arming", armValue);
 
+        rc_releaseChannels(0xFF);
         m_state = Idle; //force going to idle;
 
         return response;
@@ -301,7 +314,9 @@ private:
     void rc_releaseChannels(int flags) {
         for (int i=0;i<8;i++) {
             if (flags & 1) {
-                 ROS_INFO("Releasing channel %d ...",i);
+                 if (m_state != Idle) {
+                     ROS_INFO("Releasing channel %d ...",i);
+                 }
                  m_rc_override.channels[i] = 0;
             }
             flags >> 1;
@@ -400,6 +415,11 @@ private:
         updateTransform();
 
         switch(m_state) {
+            case Idle:
+            {
+                //literally nothing to do
+                return;
+            }
             case Armed:
             {
                 rc_setChannel(Roll, m_RC_roll_mid);
@@ -415,7 +435,7 @@ private:
                     } else {
                         /* takeoff is over, shifting to automatic */
                         pidReset();
-                        ROS_INFO("Shifting to automatic mode..., current_z=%f", m_pose_worldFrame.pose.position.z);
+                        ROS_INFO("Shifting to automatic mode..., current_z=%.2f", m_pose_worldFrame.pose.position.z);
                         m_state = Automatic;
                     }
                 } else {
@@ -448,7 +468,7 @@ private:
             case Automatic:
             {
                 if (iterationCounter==0) {
-                    ROS_INFO("Relative target: %f", m_goal_bodyFrame.pose.position.z);
+                    ROS_INFO("Relative target: %.2f", m_goal_bodyFrame.pose.position.z);
                     //ROS_INFO("targetDrone");
                     //ROS_INFO("%f, %f, %f",targetDrone.pose.position.x, targetDrone.pose.position.y, targetDrone.pose.position.z);
                     //ROS_INFO("%f, %f, %f, %f",targetDrone.pose.orientation.x, targetDrone.pose.orientation.y, 
@@ -474,15 +494,10 @@ private:
                     //ROS_INFO("Target Roll, Pitch, Yaw: (%f,%f,%f)", roll, pitch, yaw);
                     //ROS_INFO("m_pidX, m_pidY, m_pidZ, m_pidYaw: (%f,%f,%f, %f)", 
                     //  msg.linear.x, msg.linear.y, msg.linear.z, msg.angular.z);
-                    ROS_INFO("m_pidY=%f",msg.linear.y);
-                    ROS_INFO("m_pidZ=%f",msg.linear.z);
+                    ROS_INFO("m_pidY=%.2f",msg.linear.y);
+                    ROS_INFO("m_pidZ=%.2f",msg.linear.z);
                 }
                 rc_biasedOutput(msg);
-            }
-            break;
-            case Idle:
-            {
-		rc_releaseChannels(0xFF);
             }
             break;
         }
@@ -539,18 +554,18 @@ private:
 /* just printing all parameters */
     void print_RC_params(void) {
         ROS_INFO("Loaded RC parameters:\n\
-\tm_RC_roll_min=%f\n\
-\tm_RC_roll_mid=%f\n\
-\tm_RC_roll_max=%f\n\
-\tm_RC_pitch_min=%f\n\
-\tm_RC_pitch_mid=%f\n\
-\tm_RC_pitch_max=%f\n\
-\tm_RC_yaw_min=%f\n\
-\tm_RC_yaw_mid=%f\n\
-\tm_RC_yaw_max=%f\n\
-\tm_RC_thrust_min=%f\n\
-\tm_RC_thrust_mid=%f\n\
-\tm_RC_thrust_max=%f\n\
+\t\t\t\t\tm_RC_roll_min=%.2f\n\
+\t\t\t\t\tm_RC_roll_mid=%.2f\n\
+\t\t\t\t\tm_RC_roll_max=%.2f\n\
+\t\t\t\t\tm_RC_pitch_min=%.2f\n\
+\t\t\t\t\tm_RC_pitch_mid=%.2f\n\
+\t\t\t\t\tm_RC_pitch_max=%.2f\n\
+\t\t\t\t\tm_RC_yaw_min=%.2f\n\
+\t\t\t\t\tm_RC_yaw_mid=%.2f\n\
+\t\t\t\t\tm_RC_yaw_max=%.2f\n\
+\t\t\t\t\tm_RC_thrust_min=%.2f\n\
+\t\t\t\t\tm_RC_thrust_mid=%.2f\n\
+\t\t\t\t\tm_RC_thrust_max=%.2f\n\
 ", 
      m_RC_roll_min,
      m_RC_roll_mid,

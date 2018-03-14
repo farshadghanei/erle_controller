@@ -30,10 +30,10 @@ public:
         , m_i_on_off(true)
         , m_speedThreshold(speedThreshold)
         , m_previousTime(ros::Time::now()) {
-	ROS_INFO("PID %s initialized with: \n\t\
-                (kp=%f kd=%f ki=%f) \n\t\
-                (minOutput=%f maxOutput=%f) \n\t\
-                (integratorMin=%f integratorMax=%f)"
+	ROS_INFO("PID %s initialized with: \n\t\t\t\
+                (kp=%.2f kd=%.2f ki=%.2f) \n\t\t\t\
+                (minOutput=%.2f maxOutput=%.2f) \n\t\t\t\
+                (integratorMin=%.2f integratorMax=%.2f)"
                 , name.c_str(), m_kp, m_kd, m_ki
                 , m_minOutput, m_maxOutput
                 , m_integratorMin, m_integratorMax);
