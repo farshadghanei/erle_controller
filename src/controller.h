@@ -28,10 +28,11 @@ class Controller
 private:
     enum State {
         Idle = 0,
-        Automatic = 1,
+        Armed = 1,
         TakingOff = 2,
-        Landing = 3,
-        Armed = 4,
+        Automatic = 3,
+        Landing_1 = 4,
+        Landing_2 = 5,
     };
 
 private:
@@ -373,7 +374,7 @@ private:
             m_goal_worldFrame.pose.position = m_pose_worldFrame.pose.position;
             m_goal_worldFrame.pose.orientation = m_pose_worldFrame.pose.orientation;
 
-            m_state = Landing;
+            m_state = Landing_1;
             response = true;
         } else {
             ROS_INFO("state is not ready for landing!");
@@ -407,6 +408,33 @@ private:
         m_pidY.reset();
         m_pidZ.reset();
         m_pidYaw.reset();
+    }
+
+    /* applies PID values to RC channels based on target */
+    void update_PID() {
+        tfScalar roll, pitch, yaw;
+        tf::Matrix3x3(
+            tf::Quaternion(
+                m_goal_bodyFrame.pose.orientation.x,
+                m_goal_bodyFrame.pose.orientation.y,
+                m_goal_bodyFrame.pose.orientation.z,
+                m_goal_bodyFrame.pose.orientation.w
+            )).getRPY(roll, pitch, yaw);
+        
+        geometry_msgs::Twist msg;
+        //msg.angular.z = m_pidYaw.update(0.0, yaw);
+        //msg.linear.x = m_pidX.update(0.0, targetDrone.pose.position.x);
+        msg.linear.y = m_pidY.update(0.0, m_goal_bodyFrame.pose.position.y);
+        msg.linear.z = m_pidZ.update(0.0, m_goal_bodyFrame.pose.position.z);
+        if (iterationCounter==0) {
+            //ROS_INFO("Target Roll, Pitch, Yaw: (%f,%f,%f)", roll, pitch, yaw);
+            //ROS_INFO("m_pidX, m_pidY, m_pidZ, m_pidYaw: (%f,%f,%f, %f)", 
+            //  msg.linear.x, msg.linear.y, msg.linear.z, msg.angular.z);
+            ROS_INFO("m_pidY(p, d, i)=(%.2f, %.2f, %.2f)", m_pidY.p(), m_pidY.d(), m_pidY.i());
+            ROS_INFO("m_pidZ(p, d, i)=(%.2f, %.2f, %.2f)", m_pidZ.p(), m_pidZ.d(), m_pidZ.i());
+        }
+        rc_biasedOutput(msg);
+
     }
 
     /* repeating each dt */
@@ -463,17 +491,23 @@ private:
                 }
             }
             break;
-            case Landing:
+            case Landing_1:
+            {
+                if (m_pose_worldFrame.pose.position.z > m_landing_targetHeight) {
+                    //ROS_INFO("before.target height: %.2f, decline speed: %.2f, dt: %.2f",
+                    //         m_goal_worldFrame.pose.position.z,  m_landing_declineSpeed, dt);
+		    m_goal_worldFrame.pose.position.z -= m_landing_declineSpeed * dt;
+                    //ROS_INFO("landing slowly, goal height is: %.2f", m_goal_worldFrame.pose.position.z);
+                    update_PID();
+                } else {
+                    m_state = Landing_2;
+                }
+            }
+            break;
+            case Landing_2:
             {
                 if (rc_getChannel(Thrust) > m_RC_thrust_min) {
-                    if (m_pose_worldFrame.pose.position.z > m_landing_targetHeight) {
-                        //ROS_INFO("before.target height: %.2f, decline speed: %.2f, dt: %.2f",
-                        //         m_goal_worldFrame.pose.position.z,  m_landing_declineSpeed, dt);
-		        m_goal_worldFrame.pose.position.z -= m_landing_declineSpeed * dt;
-                        //ROS_INFO("landing slowly, goal height is: %.2f", m_goal_worldFrame.pose.position.z);
-                    } else {
-                        rc_setChannel(Thrust, rc_getChannel(Thrust) - m_landing_thrustStep * dt);
-                    }
+                    rc_setChannel(Thrust, rc_getChannel(Thrust) - m_landing_thrustStep * dt);
                 } else {
                     /* Landed? or Any issue? */
                     ROS_INFO("Landing procedure finished. Changing state to Armed");
@@ -481,46 +515,14 @@ private:
                     m_state = Armed;
                 }
             }
-            // intentional fall-thru
+            break;
             case Automatic:
             {
-                if (iterationCounter==0) {
-                    ROS_INFO("Relative target: (%.2f, %.2f, %.2f)", 
-                              m_goal_bodyFrame.pose.position.x, 
-                              m_goal_bodyFrame.pose.position.y, 
-                              m_goal_bodyFrame.pose.position.z);
-                    //ROS_INFO("targetDrone");
-                    //ROS_INFO("%f, %f, %f",targetDrone.pose.position.x, targetDrone.pose.position.y, targetDrone.pose.position.z);
-                    //ROS_INFO("%f, %f, %f, %f",targetDrone.pose.orientation.x, targetDrone.pose.orientation.y, 
-                    //  targetDrone.pose.orientation.z,targetDrone.pose.orientation.w);
-                }
-                tfScalar roll, pitch, yaw;
-                tf::Matrix3x3(
-                    tf::Quaternion(
-                        m_goal_bodyFrame.pose.orientation.x,
-                        m_goal_bodyFrame.pose.orientation.y,
-                        m_goal_bodyFrame.pose.orientation.z,
-                        m_goal_bodyFrame.pose.orientation.w
-                    )).getRPY(roll, pitch, yaw);
-        
-                geometry_msgs::Twist msg;
-                //msg.angular.z = m_pidYaw.update(0.0, yaw);
-                //msg.linear.x = m_pidX.update(0.0, targetDrone.pose.position.x);
-                msg.linear.y = m_pidY.update(0.0, m_goal_bodyFrame.pose.position.y);
-                msg.linear.z = m_pidZ.update(0.0, m_goal_bodyFrame.pose.position.z);
-                if (iterationCounter==0) {
-                    //ROS_INFO("Target Roll, Pitch, Yaw: (%f,%f,%f)", roll, pitch, yaw);
-                    //ROS_INFO("m_pidX, m_pidY, m_pidZ, m_pidYaw: (%f,%f,%f, %f)", 
-                    //  msg.linear.x, msg.linear.y, msg.linear.z, msg.angular.z);
-                    ROS_INFO("m_pidY=%.2f",msg.linear.y);
-                    ROS_INFO("m_pidZ=%.2f",msg.linear.z);
-                }
-                rc_biasedOutput(msg);
+                update_PID();
             }
             break;
         }
         if (iterationCounter++ > 100) {
-            //ROS_INFO("Controller values (x,y,z,Yaw): (%d,%d,%d,%d)", rc_override.channels[0], rc_override.channels[1], rc_override.channels[2], rc_override.channels[3]);
             ROS_INFO("RC_override: (%d, *, *, %d)", rc_getChannel(Roll), rc_getChannel(Thrust));
             iterationCounter=0;
         }

@@ -65,16 +65,16 @@ public:
         return m_integral;;
     }
 
-    float kp() const {
-        return m_kp;
+    float p() const {
+        return m_out_p;
     }
 
-    float ki() const {
-        return m_ki;
+    float i() const {
+        return m_out_i;
     }
 
-    float kd() const {
-        return m_kd;
+    float d() const {
+        return m_out_d;
     }
 
     /* update the output of PID based on updated error and time */
@@ -82,12 +82,12 @@ public:
         ros::Time time = ros::Time::now();
         float dt = time.toSec() - m_previousTime.toSec();
         float error = targetValue - value;
-        float p = m_kp * error;
-        float d = 0;
+        m_out_p = m_kp * error;
+        m_out_d = 0;
         if (dt > 0) {
-            d = m_kd * (error - m_previousError) / dt;
+            m_out_d = m_kd * (error - m_previousError) / dt;
         }
-        if (d < m_speedThreshold) {
+        if (m_out_d < m_speedThreshold) {
             m_i_on_off = true;
         } else {
             m_i_on_off = false;
@@ -97,15 +97,18 @@ public:
         } else {
             m_integral = 0;
         }
-        float i = m_ki * m_integral;
-        i = std::max(std::min(i, m_integratorMax), m_integratorMin);
-        float output = p + d + i;
+        float m_out_i = m_ki * m_integral;
+        m_out_i = std::max(std::min(m_out_i, m_integratorMax), m_integratorMin);
+        float output = m_out_p + m_out_d + m_out_i;
         m_previousError = error;
         m_previousTime = time;
         return std::max(std::min(output, m_maxOutput), m_minOutput);
     }
 
 private:
+    float m_out_p;         //proportional output
+    float m_out_d;         //differential output
+    float m_out_i;         //integral output
     float m_kp;         //proportional coefficient
     float m_kd;         //differential coefficient
     float m_ki;         //integral coefficient
