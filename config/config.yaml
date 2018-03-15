@@ -58,6 +58,6 @@ Takeoff:
     targetHeight: 2.0
     liftThreshold: 0.10
 Landing:
-    thrustStep: 50
-    targetHeight: 0.20
+    thrustStep: 25
+    targetHeight: 0.30
     declineSpeed: 0.20

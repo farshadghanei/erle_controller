@@ -28,6 +28,7 @@ public:
         , m_integral(0)
         , m_previousError(0)
         , m_i_on_off(true)
+        , m_i_force_off(false)
         , m_speedThreshold(speedThreshold)
         , m_previousTime(ros::Time::now()) {
 	ROS_INFO("PID %s initialized with: \n\t\t\t\
@@ -48,12 +49,12 @@ public:
 
     /* start accumulating integral */
     void enableIntegral(void) {
-        m_i_on_off = true;
+        m_i_force_off = false;
     }
 
     /* stop accumulating integral */
     void disableIntegral(void) {
-        m_i_on_off = false;
+        m_i_force_off = true;
     }
 
     /* manually set integral for biasing*/
@@ -87,14 +88,11 @@ public:
         if (dt > 0) {
             m_out_d = m_kd * (error - m_previousError) / dt;
         }
-        if (m_out_d < m_speedThreshold) {
+        if (m_out_d < m_speedThreshold && !m_i_force_off) {
             m_i_on_off = true;
-        } else {
-            m_i_on_off = false;
-        }
-        if (m_i_on_off) {
             m_integral += error * dt;
         } else {
+            m_i_on_off = false;
             m_integral = 0;
         }
         float m_out_i = m_ki * m_integral;
@@ -119,7 +117,8 @@ private:
     float m_integral;       // integral component uncapped
     float m_previousError;
     ros::Time m_previousTime;
-    bool m_i_on_off;        // whether integral component should be accounted
+    bool m_i_force_off;        // whether integral component should be accounted, set externally
+    bool m_i_on_off;        // whether integral component should be accounted, set internally based on speed
     float m_speedThreshold; // speed under which the integrator works
 };
 

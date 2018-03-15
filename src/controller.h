@@ -122,6 +122,7 @@ public:
         , m_serviceTakeoff()
         , m_serviceLand()
         , m_serviceStop()
+        , m_serviceReleaseRC()
         , m_startZ(0)
     {
         ROS_INFO("controller object created");
@@ -136,7 +137,8 @@ public:
         m_serviceArm = nh.advertiseService("erle/arm", &Controller::arm, this);
         m_serviceDisarm = nh.advertiseService("erle/disarm", &Controller::disarm, this);
         m_serviceStop = nh.advertiseService("erle/stop", &Controller::stop, this);
-        ROS_INFO("Services advertised: erle/arm, disarm, takeoff, land, stop");
+        m_serviceReleaseRC = nh.advertiseService("erle/releaseRC", &Controller::releaseRC, this);
+        ROS_INFO("Services advertised: erle/arm, disarm, takeoff, land, stop, releaseRC");
         ROS_WARN("*** Make sure you have set ThrustMid value correctly! ***");
 
         m_goal_worldFrame.pose.orientation.w = 1.0; //TODO needs to go away
@@ -152,7 +154,7 @@ public:
     }
 
 private:
-    /* abstraction for publishing the output */
+    /* applying PID values biased around middle stick values (hover value for thrust) */
     void rc_biasedOutput(geometry_msgs::Twist msg) {
     //if (msg.linear.x + msg.linear.y + msg.linear.z + msg.angular.z > 0.0001) {
     //  ROS_INFO("Controller values (x,y,z,Yaw): (%f,%f,%f,%f)",msg.linear.x, msg.linear.y, msg.linear.z, msg.angular.z);
@@ -172,16 +174,6 @@ private:
             rc_setChannel(Thrust, m_RC_thrust_mid + msg.linear.z);
     }
 
-    /* setting hover/goal position  manually */
-    bool set_goal_height(
-            std_srvs::Empty::Request& req,
-            std_srvs::Empty::Request& res) {
-
-        m_goal_worldFrame.pose.position.z = 1;
-        m_goal_worldFrame.pose.orientation.w = 1.0;
-        ROS_INFO("set_goal_height requested. setting it to %.2f", m_goal_worldFrame.pose.position.z);
-        return true;
-    }
     void goalChanged(
         const geometry_msgs::PoseStamped::ConstPtr& msg)
     {
@@ -212,7 +204,8 @@ private:
             if (ros::service::call("/mavros/cmd/arming", armValue)) {
                 ROS_INFO("send armValue successful.");
                 response = true;
-                m_state = Armed;                
+                m_state = Armed;
+                ROS_INFO("ThrustMin: %.2f, armThrust: %.2f", m_RC_thrust_min, m_armThrust);                
                 rc_setChannel(Thrust, m_RC_thrust_min); //initial value for thrust, we'll increase it a bit
             } else {
                 ROS_INFO("send armValue failed");
@@ -263,6 +256,22 @@ private:
             ROS_INFO("state is not armed, cannot call disarm.");
             response = false;
         }
+        return response;
+    }
+
+    /* force release RC and go to Idle*/
+    bool releaseRC(
+        std_srvs::Empty::Request& req,
+        std_srvs::Empty::Response& res) {
+
+        bool response;
+
+        ROS_INFO("RC release requested!!!");
+
+        m_state = Idle; //force going to idle;
+        rc_releaseChannels(0xFF);
+        response = true; //why not?
+
         return response;
     }
 
@@ -374,6 +383,7 @@ private:
             m_goal_worldFrame.pose.position = m_pose_worldFrame.pose.position;
             m_goal_worldFrame.pose.orientation = m_pose_worldFrame.pose.orientation;
 
+            m_pidZ.disableIntegral();
             m_state = Landing_1;
             response = true;
         } else {
@@ -462,9 +472,13 @@ private:
             case Armed:
             {
                 rc_setChannel(Roll, m_RC_roll_mid);
+                //prevent auto disarm
                 if (rc_getChannel(Thrust) < m_RC_thrust_min + m_armThrust) {
-                        //prevent auto disarm
-                        rc_setChannel(Thrust, rc_getChannel(Thrust) + m_takeoff_thrustStep * dt);
+                    //set the thrust smoothly
+                    rc_setChannel(Thrust, rc_getChannel(Thrust) + m_takeoff_thrustStep * dt);
+                } else {
+                    //prevent overthrust
+                    rc_getChannel(Thrust) = m_RC_thrust_min + m_armThrust;
                 }
             }
             break;
@@ -477,6 +491,7 @@ private:
                     } else {
                         /* takeoff is over, shifting to automatic */
                         pidReset();
+            		m_pidZ.enableIntegral();
                         ROS_INFO("Shifting to automatic mode..., current_z=%.2f", m_pose_worldFrame.pose.position.z);
                         m_state = Automatic;
                     }
@@ -506,7 +521,7 @@ private:
             break;
             case Landing_2:
             {
-                if (rc_getChannel(Thrust) > m_RC_thrust_min) {
+                if (rc_getChannel(Thrust) > m_RC_thrust_min + m_armThrust) {
                     rc_setChannel(Thrust, rc_getChannel(Thrust) - m_landing_thrustStep * dt);
                 } else {
                     /* Landed? or Any issue? */
@@ -550,6 +565,7 @@ private:
     ros::ServiceServer m_serviceArm;
     ros::ServiceServer m_serviceDisarm;
     ros::ServiceServer m_serviceStop;
+    ros::ServiceServer m_serviceReleaseRC;
     float m_startZ;
     int iterationCounter;
     float m_RC_roll_min;
