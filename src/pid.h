@@ -16,7 +16,7 @@ public:
         float maxOutput,
         float integratorMin,
         float integratorMax,
-        float speedThreshold,
+        float i_approximnity,
         const std::string& name)
         : m_kp(kp)
         , m_kd(kd)
@@ -29,7 +29,7 @@ public:
         , m_previousError(0)
         , m_i_on_off(true)
         , m_i_force_off(false)
-        , m_speedThreshold(speedThreshold)
+        , m_i_approximity(i_approximnity)
         , m_previousTime(ros::Time::now())
         , m_name(name) {
 	ROS_INFO("PID %s initialized with: \n\t\t\t\
@@ -84,12 +84,20 @@ public:
         ros::Time time = ros::Time::now();
         float dt = time.toSec() - m_previousTime.toSec();
         float error = targetValue - value;
+        if (error - m_previousError > 0.50)
+            ROS_WARN("A jump in the PID %s error value is detected", m_name.c_str());
+        float speed = (error - m_previousError) / dt;
         m_out_p = m_kp * error;
         m_out_d = 0;
         if (dt > 0) {
-            m_out_d = m_kd * (error - m_previousError) / dt;
+            m_out_d = m_kd * speed;
         }
-        if (!m_i_force_off) {// && (m_out_d / m_kd) < m_speedThreshold) { TODO fix speedThreshold
+        if (m_previousError < m_i_approximity && error >= m_i_approximity)
+            ROS_WARN("Moved out of approximity in %s. integrator will be disabled", m_name.c_str());
+        if (m_previousError >= m_i_approximity && error < m_i_approximity)
+            ROS_WARN("Moved back to approximity in %s. integrator will be enabled", m_name.c_str());
+
+        if (!m_i_force_off && error < m_i_approximity) {
             m_i_on_off = true;
             m_integral += error * dt;
         } else {
@@ -120,7 +128,7 @@ private:
     ros::Time m_previousTime;
     bool m_i_force_off;        // whether integral component should be accounted, set externally
     bool m_i_on_off;        // whether integral component should be accounted, set internally based on speed
-    float m_speedThreshold; // speed under which the integrator works
+    float m_i_approximity; // approximity around target in which the integrator works
     std::string m_name;
 };
 

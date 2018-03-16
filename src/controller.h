@@ -60,7 +60,7 @@ public:
             get(n, NODE_NAME+"/PIDs/X/maxOutput"),
             get(n, NODE_NAME+"/PIDs/X/integratorMin"),
             get(n, NODE_NAME+"/PIDs/X/integratorMax"),
-            get(n, NODE_NAME+"/PIDs/X/integratorSpeedThreshold"),
+            get(n, NODE_NAME+"/PIDs/X/integratorApproximity"),
             "x")
         , m_pidY(
             get(n, NODE_NAME+"/PIDs/Y/kp"),
@@ -70,7 +70,7 @@ public:
             get(n, NODE_NAME+"/PIDs/Y/maxOutput"),
             get(n, NODE_NAME+"/PIDs/Y/integratorMin"),
             get(n, NODE_NAME+"/PIDs/Y/integratorMax"),
-            get(n, NODE_NAME+"/PIDs/Y/integratorSpeedThreshold"),
+            get(n, NODE_NAME+"/PIDs/Y/integratorApproximity"),
             "y")
         , m_pidZ(
             get(n, NODE_NAME+"/PIDs/Z/kp"),
@@ -80,7 +80,7 @@ public:
             get(n, NODE_NAME+"/PIDs/Z/maxOutput"),
             get(n, NODE_NAME+"/PIDs/Z/integratorMin"),
             get(n, NODE_NAME+"/PIDs/Z/integratorMax"),
-            get(n, NODE_NAME+"/PIDs/Z/integratorSpeedThreshold"),
+            get(n, NODE_NAME+"/PIDs/Z/integratorApproximity"),
             "z")
         , m_pidYaw(
             get(n, NODE_NAME+"/PIDs/Yaw/kp"),
@@ -90,7 +90,7 @@ public:
             get(n, NODE_NAME+"/PIDs/Yaw/maxOutput"),
             get(n, NODE_NAME+"/PIDs/Yaw/integratorMin"),
             get(n, NODE_NAME+"/PIDs/Yaw/integratorMax"),
-            get(n, NODE_NAME+"/PIDs/Yaw/integratorSpeedThreshold"),
+            get(n, NODE_NAME+"/PIDs/Yaw/integratorApproximity"),
             "yaw")
         , m_RC_roll_min(get(n, NODE_NAME+"/RC/roll/min"))
         , m_RC_roll_mid(get(n, NODE_NAME+"/RC/roll/mid"))
@@ -126,7 +126,6 @@ public:
         , m_startZ(0)
     {
         ROS_INFO("controller object created");
-        print_RC_params();
         ros::NodeHandle nh;
         m_listener.waitForTransform(m_worldFrame, m_frame, ros::Time(0), ros::Duration(10.0)); 
         ROS_INFO("transform_listener result: %s",m_listener.allFramesAsString().c_str());
@@ -141,7 +140,7 @@ public:
         ROS_INFO("Services advertised: erle/arm, disarm, takeoff, land, stop, releaseRC");
         ROS_WARN("*** Make sure you have set ThrustMid value correctly! ***");
 
-        m_goal_worldFrame.pose.orientation.w = 1.0; //TODO needs to go away
+        m_goal_worldFrame.pose.orientation.w = 1.0; //Just a value for default pose. Quaternions can't be all zero
     }
 
     void run(double frequency)
@@ -156,24 +155,9 @@ public:
 private:
     /* applying PID values biased around middle stick values (hover value for thrust) */
     void rc_biasedOutput(geometry_msgs::Twist msg) {
-    //if (msg.linear.x + msg.linear.y + msg.linear.z + msg.angular.z > 0.0001) {
-    //  ROS_INFO("Controller values (x,y,z,Yaw): (%f,%f,%f,%f)",msg.linear.x, msg.linear.y, msg.linear.z, msg.angular.z);
-    //}
-        //rc_override.channels[0] = m_RC_midRoll + msg.linear.x;
-        //rc_override.channels[1] = m_RC_midPitch + msg.linear.y;
-        //m_rc_override.channels[2] = m_RC_thrust_min + msg.linear.z;
-        //rc_override.channels[3] = m_RC_midYaw + msg.angular.z;
-        /* we only set channels if PID value is non-zero, 
-           otherwise we will keep it as is 
-           the values are biased around MID values for channels.
-           but if PID is zero, we don't want to force MID value.
-        */
-        if (msg.linear.x != 0)
-            rc_setChannel(Pitch, m_RC_pitch_mid + msg.linear.x);
-        if (msg.linear.y != 0)
-            rc_setChannel(Roll, m_RC_roll_mid + msg.linear.y);
-        if (msg.linear.z != 0)
-            rc_setChannel(Thrust, m_RC_thrust_mid + msg.linear.z);
+        rc_setChannel(Pitch, m_RC_pitch_mid + msg.linear.x);
+        rc_setChannel(Roll, m_RC_roll_mid + msg.linear.y);
+        rc_setChannel(Thrust, m_RC_thrust_mid + msg.linear.z);
     }
 
     void goalChanged(
@@ -206,9 +190,14 @@ private:
             if (ros::service::call("/mavros/cmd/arming", armValue)) {
                 ROS_INFO("send armValue successful.");
                 response = true;
-                m_state = Armed;
                 ROS_INFO("ThrustMin: %.2f, armThrust: %.2f", m_RC_thrust_min, m_armThrust);                
-                rc_setChannel(Thrust, m_RC_thrust_min); //initial value for thrust, we'll increase it a bit
+                rc_rollbackChannels();//initial value for thrust, we'll increase it gradually
+                for (int i = 0; i < m_armThrust; i++) {
+                    rc_setChannel(Thrust, m_RC_thrust_min + i);
+                    rc_out();
+                    ros::Duration(0.010).sleep();
+                }
+                m_state = Armed;
             } else {
                 ROS_INFO("send armValue failed");
                 response = false;
@@ -228,6 +217,7 @@ private:
         bool response;
         if (m_state == Armed || m_state == TakingOff || m_state == Automatic) {
             ROS_INFO("Disarm requested...");
+            m_state = Idle;
             rc_rollbackChannels();
             ros::Duration(0.5).sleep();
             //put stick to disarm position
@@ -253,7 +243,6 @@ private:
             */
             response = true;
             rc_releaseChannels(0xFF);
-            m_state = Idle;
         } else {
             ROS_INFO("state is not armed, cannot call disarm.");
             response = false;
@@ -292,8 +281,8 @@ private:
         std_srvs::Empty::Response dummy_res;
         disarm(dummy_req, dummy_res);
         
-        rc_releaseChannels(0xFF);
         m_state = Idle; //force going to idle;
+        rc_releaseChannels(0xFF);
         response = true; //why not?
 
         return response;
@@ -439,17 +428,16 @@ private:
         msg.linear.z = m_pidZ.update(0.0, m_goal_bodyFrame.pose.position.z);
         //msg.angular.z = m_pidYaw.update(0.0, yaw);
         if (iterationCounter==0) {
-/*
-            ROS_INFO("\n\t\
-            Position      (x, y, z): (%.2f, %.2f, %.2f)",
+
+            ROS_INFO("Position      (x, y, z): (%.2f, %.2f, %.2f)",
             m_pose_worldFrame.pose.position.x, 
             m_pose_worldFrame.pose.position.y, 
             m_pose_worldFrame.pose.position.z); 
-            ROS_INFO("\Goal          (x, y, z): (%.2f, %.2f, %.2f)",
+            ROS_INFO("Goal          (x, y, z): (%.2f, %.2f, %.2f)",
             m_goal_worldFrame.pose.position.x, 
             m_goal_worldFrame.pose.position.y, 
             m_goal_worldFrame.pose.position.z); 
-*/
+
             ROS_INFO("Relative Goal (x, y, z): (%.2f, %.2f, %.2f)",
             m_goal_bodyFrame.pose.position.x, 
             m_goal_bodyFrame.pose.position.y, 
@@ -496,15 +484,16 @@ private:
                     //prevent overthrust
                     rc_setChannel(Thrust, m_RC_thrust_min + m_armThrust);
                 }
+                rc_out();
             }
             break;
             case TakingOff: 
             {
                 if (rc_getChannel(Thrust) < m_RC_thrust_max) {
                     if (m_pose_worldFrame.pose.position.z < m_startZ + m_takeoff_liftThreshold) {
-                        rc_setChannel(Thrust, rc_getChannel(Thrust) + m_takeoff_thrustStep * dt);
-                        rc_setChannel(Roll, m_RC_roll_mid);
-                        rc_setChannel(Pitch, m_RC_pitch_mid);
+                        int currentThrust = rc_getChannel(Thrust);
+                        update_PID();
+                        rc_setChannel(Thrust, currentThrust +  m_takeoff_thrustStep * dt);
                     } else {
                         /* takeoff is over, shifting to automatic */
                         pidReset();
@@ -512,6 +501,7 @@ private:
                         ROS_INFO("Shifting to automatic mode..., current_z=%.2f", m_pose_worldFrame.pose.position.z);
                         m_state = Automatic;
                     }
+                    rc_out();
                 } else {
                     /* Full thrust but no lift? Any issue? */
                     ROS_INFO("Haven't lifted yet? Possible problems: no propeller, crash, etc.");
@@ -525,12 +515,13 @@ private:
             break;
             case Landing_1:
             {
-                if (m_pose_worldFrame.pose.position.z > m_landing_targetHeight) {
+                if (m_pose_worldFrame.pose.position.z > m_landing_targetHeight + m_startZ) {
                     //ROS_INFO("before.target height: %.2f, decline speed: %.2f, dt: %.2f",
                     //         m_goal_worldFrame.pose.position.z,  m_landing_declineSpeed, dt);
 		    m_goal_worldFrame.pose.position.z -= m_landing_declineSpeed * dt;
                     //ROS_INFO("landing slowly, goal height is: %.2f", m_goal_worldFrame.pose.position.z);
                     update_PID();
+                    rc_out();
                 } else {
                     m_state = Landing_2;
                 }
@@ -538,7 +529,7 @@ private:
             break;
             case Landing_2:
             {
-                if (rc_getChannel(Thrust) > m_RC_thrust_min + m_armThrust) {
+                if (rc_getChannel(Thrust) > m_RC_thrust_min) {
                     rc_setChannel(Thrust, rc_getChannel(Thrust) - m_landing_thrustStep * dt);
                 } else {
                     /* Landed? or Any issue? */
@@ -546,19 +537,32 @@ private:
                     ROS_INFO("Haven't landed yet? Possible problems: wrong height, crash, etc., call Disarm or Stop");
                     m_state = Armed;
                 }
+                rc_out();
             }
             break;
             case Automatic:
             {
                 update_PID();
+                rc_out();
             }
             break;
         }
-        if (iterationCounter++ > 100) {
+        if (iterationCounter++ > 0) {
+            ROS_INFO("The position is: (%.2f, %.2f, %.2f)", 
+                       m_pose_worldFrame.pose.position.x, 
+                       m_pose_worldFrame.pose.position.y, 
+                       m_pose_worldFrame.pose.position.z);
+            ROS_INFO("The goal is : (%.2f, %.2f, %.2f)",
+                       m_goal_worldFrame.pose.position.x, 
+                       m_goal_worldFrame.pose.position.y, 
+                       m_goal_worldFrame.pose.position.z);
+            ROS_INFO("Relative goal is : (%.2f, %.2f, %.2f)",
+                       m_goal_bodyFrame.pose.position.x, 
+                       m_goal_bodyFrame.pose.position.y, 
+                       m_goal_bodyFrame.pose.position.z);
             ROS_INFO("RC_override: (%d, %d, %d, *)", rc_getChannel(Roll), rc_getChannel(Pitch), rc_getChannel(Thrust));
             iterationCounter=0;
         }
-        rc_out();
     }
 
 private:
@@ -604,36 +608,6 @@ private:
     float m_landing_targetHeight;
     float m_landing_declineSpeed;
     float m_armThrust;
-
-/* just printing all parameters */
-    void print_RC_params(void) {
-        ROS_INFO("Loaded RC parameters:\n\
-\t\t\t\t\tm_RC_roll_min=%.2f\n\
-\t\t\t\t\tm_RC_roll_mid=%.2f\n\
-\t\t\t\t\tm_RC_roll_max=%.2f\n\
-\t\t\t\t\tm_RC_pitch_min=%.2f\n\
-\t\t\t\t\tm_RC_pitch_mid=%.2f\n\
-\t\t\t\t\tm_RC_pitch_max=%.2f\n\
-\t\t\t\t\tm_RC_yaw_min=%.2f\n\
-\t\t\t\t\tm_RC_yaw_mid=%.2f\n\
-\t\t\t\t\tm_RC_yaw_max=%.2f\n\
-\t\t\t\t\tm_RC_thrust_min=%.2f\n\
-\t\t\t\t\tm_RC_thrust_mid=%.2f\n\
-\t\t\t\t\tm_RC_thrust_max=%.2f\n\
-", 
-     m_RC_roll_min,
-     m_RC_roll_mid,
-     m_RC_roll_max,
-     m_RC_pitch_min,
-     m_RC_pitch_mid,
-     m_RC_pitch_max,
-     m_RC_yaw_min,
-     m_RC_yaw_mid,
-     m_RC_yaw_max,
-     m_RC_thrust_min,
-     m_RC_thrust_mid,
-     m_RC_thrust_max);
-    }
 
 };
 
