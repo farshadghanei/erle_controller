@@ -168,6 +168,8 @@ private:
            the values are biased around MID values for channels.
            but if PID is zero, we don't want to force MID value.
         */
+        if (msg.linear.x != 0)
+            rc_setChannel(Pitch, m_RC_pitch_mid + msg.linear.x);
         if (msg.linear.y != 0)
             rc_setChannel(Roll, m_RC_roll_mid + msg.linear.y);
         if (msg.linear.z != 0)
@@ -353,11 +355,11 @@ private:
             m_goal_worldFrame.pose.orientation = m_pose_worldFrame.pose.orientation;
             m_goal_worldFrame.pose.position.z = m_takeoff_targetHeight;
             m_startZ = m_pose_worldFrame.pose.position.z;
-            ROS_INFO("The original position is: (%4.2f, %4.2f, %4.2f)", 
+            ROS_INFO("The original position is: (%.2f, %.2f, %.2f)", 
                        m_pose_worldFrame.pose.position.x, 
                        m_pose_worldFrame.pose.position.y, 
                        m_pose_worldFrame.pose.position.z);
-            ROS_INFO("The goal for takeoff is : (%4.2f, %4.2f, %4.2f)",
+            ROS_INFO("The goal for takeoff is : (%.2f, %.2f, %.2f)",
                        m_goal_worldFrame.pose.position.x, 
                        m_goal_worldFrame.pose.position.y, 
                        m_goal_worldFrame.pose.position.z);
@@ -432,14 +434,27 @@ private:
             )).getRPY(roll, pitch, yaw);
         
         geometry_msgs::Twist msg;
-        //msg.angular.z = m_pidYaw.update(0.0, yaw);
-        //msg.linear.x = m_pidX.update(0.0, targetDrone.pose.position.x);
+        msg.linear.x = m_pidX.update(0.0, m_goal_bodyFrame.pose.position.x);
         msg.linear.y = m_pidY.update(0.0, m_goal_bodyFrame.pose.position.y);
         msg.linear.z = m_pidZ.update(0.0, m_goal_bodyFrame.pose.position.z);
+        //msg.angular.z = m_pidYaw.update(0.0, yaw);
         if (iterationCounter==0) {
-            //ROS_INFO("Target Roll, Pitch, Yaw: (%f,%f,%f)", roll, pitch, yaw);
-            //ROS_INFO("m_pidX, m_pidY, m_pidZ, m_pidYaw: (%f,%f,%f, %f)", 
-            //  msg.linear.x, msg.linear.y, msg.linear.z, msg.angular.z);
+/*
+            ROS_INFO("\n\t\
+            Position      (x, y, z): (%.2f, %.2f, %.2f)",
+            m_pose_worldFrame.pose.position.x, 
+            m_pose_worldFrame.pose.position.y, 
+            m_pose_worldFrame.pose.position.z); 
+            ROS_INFO("\Goal          (x, y, z): (%.2f, %.2f, %.2f)",
+            m_goal_worldFrame.pose.position.x, 
+            m_goal_worldFrame.pose.position.y, 
+            m_goal_worldFrame.pose.position.z); 
+*/
+            ROS_INFO("Relative Goal (x, y, z): (%.2f, %.2f, %.2f)",
+            m_goal_bodyFrame.pose.position.x, 
+            m_goal_bodyFrame.pose.position.y, 
+            m_goal_bodyFrame.pose.position.z); 
+            ROS_INFO("m_pidX(p, d, i)=(%.2f, %.2f, %.2f)", m_pidX.p(), m_pidX.d(), m_pidX.i());
             ROS_INFO("m_pidY(p, d, i)=(%.2f, %.2f, %.2f)", m_pidY.p(), m_pidY.d(), m_pidY.i());
             ROS_INFO("m_pidZ(p, d, i)=(%.2f, %.2f, %.2f)", m_pidZ.p(), m_pidZ.d(), m_pidZ.i());
         }
@@ -472,13 +487,14 @@ private:
             case Armed:
             {
                 rc_setChannel(Roll, m_RC_roll_mid);
+                rc_setChannel(Pitch, m_RC_pitch_mid);
                 //prevent auto disarm
                 if (rc_getChannel(Thrust) < m_RC_thrust_min + m_armThrust) {
                     //set the thrust smoothly
                     rc_setChannel(Thrust, rc_getChannel(Thrust) + m_takeoff_thrustStep * dt);
                 } else {
                     //prevent overthrust
-                    rc_getChannel(Thrust) = m_RC_thrust_min + m_armThrust;
+                    rc_setChannel(Thrust, m_RC_thrust_min + m_armThrust);
                 }
             }
             break;
@@ -488,6 +504,7 @@ private:
                     if (m_pose_worldFrame.pose.position.z < m_startZ + m_takeoff_liftThreshold) {
                         rc_setChannel(Thrust, rc_getChannel(Thrust) + m_takeoff_thrustStep * dt);
                         rc_setChannel(Roll, m_RC_roll_mid);
+                        rc_setChannel(Pitch, m_RC_pitch_mid);
                     } else {
                         /* takeoff is over, shifting to automatic */
                         pidReset();
@@ -538,7 +555,7 @@ private:
             break;
         }
         if (iterationCounter++ > 100) {
-            ROS_INFO("RC_override: (%d, *, *, %d)", rc_getChannel(Roll), rc_getChannel(Thrust));
+            ROS_INFO("RC_override: (%d, %d, %d, *)", rc_getChannel(Roll), rc_getChannel(Pitch), rc_getChannel(Thrust));
             iterationCounter=0;
         }
         rc_out();

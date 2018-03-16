@@ -1,12 +1,12 @@
 PIDs:
   X:
-    kp: 40.0
-    kd: 20.0
+    kp: 100.0
+    kd: 50.0
     ki: 2.0
-    minOutput: -100.0
-    maxOutput: 100.0
-    integratorMin: -20.0
-    integratorMax: 20.0
+    minOutput: -150.0
+    maxOutput: 150.0
+    integratorMin: -50.0
+    integratorMax: 50.0
     integratorSpeedThreshold: 0.2
   Y:
     kp: -100.0
@@ -50,7 +50,7 @@ RC:
     max: 1920
   thrust:
     min: 1070
-    mid: 1350
+    mid: 1440
     max: 1920
 ArmThrust: 35
 Takeoff:
@@ -60,4 +60,4 @@ Takeoff:
 Landing:
     thrustStep: 25
     targetHeight: 0.30
-    declineSpeed: 0.20
+    declineSpeed: 0.40

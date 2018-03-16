@@ -30,7 +30,8 @@ public:
         , m_i_on_off(true)
         , m_i_force_off(false)
         , m_speedThreshold(speedThreshold)
-        , m_previousTime(ros::Time::now()) {
+        , m_previousTime(ros::Time::now())
+        , m_name(name) {
 	ROS_INFO("PID %s initialized with: \n\t\t\t\
                 (kp=%.2f kd=%.2f ki=%.2f) \n\t\t\t\
                 (minOutput=%.2f maxOutput=%.2f) \n\t\t\t\
@@ -66,15 +67,15 @@ public:
         return m_integral;;
     }
 
-    float p() const {
+    float p() {
         return m_out_p;
     }
 
-    float i() const {
+    float i() {
         return m_out_i;
     }
 
-    float d() const {
+    float d() {
         return m_out_d;
     }
 
@@ -88,14 +89,14 @@ public:
         if (dt > 0) {
             m_out_d = m_kd * (error - m_previousError) / dt;
         }
-        if (m_out_d < m_speedThreshold && !m_i_force_off) {
+        if (!m_i_force_off) {// && (m_out_d / m_kd) < m_speedThreshold) { TODO fix speedThreshold
             m_i_on_off = true;
             m_integral += error * dt;
         } else {
             m_i_on_off = false;
             m_integral = 0;
         }
-        float m_out_i = m_ki * m_integral;
+        m_out_i = m_ki * m_integral;
         m_out_i = std::max(std::min(m_out_i, m_integratorMax), m_integratorMin);
         float output = m_out_p + m_out_d + m_out_i;
         m_previousError = error;
@@ -120,6 +121,7 @@ private:
     bool m_i_force_off;        // whether integral component should be accounted, set externally
     bool m_i_on_off;        // whether integral component should be accounted, set internally based on speed
     float m_speedThreshold; // speed under which the integrator works
+    std::string m_name;
 };
 
 #endif /* _PID_H_ */
