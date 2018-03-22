@@ -50,7 +50,7 @@ RC:
     max: 1920
   thrust:
     min: 1070
-    mid: 1320
+    mid: 1480
     max: 1920
 ArmThrust: 35
 Takeoff:

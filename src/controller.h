@@ -158,6 +158,7 @@ private:
         rc_setChannel(Pitch, m_RC_pitch_mid + msg.linear.x);
         rc_setChannel(Roll, m_RC_roll_mid + msg.linear.y);
         rc_setChannel(Thrust, m_RC_thrust_mid + msg.linear.z);
+        rc_setChannel(Yaw, 0); //Force access RC
     }
 
     void goalChanged(
@@ -428,7 +429,7 @@ private:
         msg.linear.z = m_pidZ.update(0.0, m_goal_bodyFrame.pose.position.z);
         //msg.angular.z = m_pidYaw.update(0.0, yaw);
         if (iterationCounter==0) {
-
+/*
             ROS_INFO("Position      (x, y, z): (%.2f, %.2f, %.2f)",
             m_pose_worldFrame.pose.position.x, 
             m_pose_worldFrame.pose.position.y, 
@@ -445,6 +446,7 @@ private:
             ROS_INFO("m_pidX(p, d, i)=(%.2f, %.2f, %.2f)", m_pidX.p(), m_pidX.d(), m_pidX.i());
             ROS_INFO("m_pidY(p, d, i)=(%.2f, %.2f, %.2f)", m_pidY.p(), m_pidY.d(), m_pidY.i());
             ROS_INFO("m_pidZ(p, d, i)=(%.2f, %.2f, %.2f)", m_pidZ.p(), m_pidZ.d(), m_pidZ.i());
+*/
         }
         rc_biasedOutput(msg);
 
@@ -547,7 +549,8 @@ private:
             }
             break;
         }
-        if (iterationCounter++ > 0) {
+        if (iterationCounter++ > 100) {
+/*
             ROS_INFO("The position is: (%.2f, %.2f, %.2f)", 
                        m_pose_worldFrame.pose.position.x, 
                        m_pose_worldFrame.pose.position.y, 
@@ -561,7 +564,7 @@ private:
                        m_goal_bodyFrame.pose.position.y, 
                        m_goal_bodyFrame.pose.position.z);
             ROS_INFO("RC_override: (%d, %d, %d, *)", rc_getChannel(Roll), rc_getChannel(Pitch), rc_getChannel(Thrust));
-            iterationCounter=0;
+*/            iterationCounter=0;
         }
     }
 

@@ -1,4 +1,5 @@
 - Setup your catkin workstation
+- install cmake
 - catkin_init_workspace
 - Download vicon_bridge ROS package (http://wiki.ros.org/vicon_bridge)
 - install cmake

@@ -6,7 +6,7 @@
   <arg name="worldFrame" default="world"/>
 
   <node name="controller_node" pkg="erle_controller" type="erle_controller_node" output="screen">
-    <param name="frequency" value="50.0" type="double" />
+    <param name="frequency" value="25.0" type="double" />
     <param name="frame" value="$(arg frame)" />
     <param name="worldFrame" value="$(arg worldFrame)" />
     <rosparam command="load" file="$(find erle_controller)/config/config.yaml" />
