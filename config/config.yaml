@@ -38,7 +38,7 @@ PIDs:
 RC:
   roll:
     min: 1070
-    mid: 1496
+    mid: 1488
     max: 1920
   pitch:
     min: 1070
@@ -50,7 +50,7 @@ RC:
     max: 1920
   thrust:
     min: 1070
-    mid: 1480
+    mid: 1340
     max: 1920
 ArmThrust: 35
 Takeoff:
