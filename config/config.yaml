@@ -1,35 +1,35 @@
 PIDs:
   X:
-    kp: 100.0
+    kp: 75.0
     kd: 50.0
     ki: 2.0
-    minOutput: -150.0
-    maxOutput: 150.0
-    integratorMin: -15.0
-    integratorMax: 15.0
+    minOutput: -125.0
+    maxOutput: 125.0
+    integratorMin: -2.0
+    integratorMax: 2.0
     integratorApproximity: 0.5
   Y:
-    kp: -100.0
+    kp: -75.0
     kd: -50.0
     ki: -2.0
-    minOutput: -150.0
-    maxOutput: 150.0
-    integratorMin: -15.0
-    integratorMax: 15.0
+    minOutput: -125.0
+    maxOutput: 125.0
+    integratorMin: -2.0
+    integratorMax: 2.0
     integratorApproximity: 0.5
   Z:
     kp: 100.0
-    kd: 150.0
+    kd: 100.0
     ki: 2.0
     minOutput: -250.0
     maxOutput: 150.0
-    integratorMin: -25.0
-    integratorMax: 25.0
+    integratorMin: -5.0
+    integratorMax: 5.0
     integratorApproximity: 0.5
   Yaw:
     kp: -200.0
     kd: -20.0
-    ki: 0.0
+    ki: 1.0
     minOutput: -200.0
     maxOutput: 200.0
     integratorMin: 0.0
@@ -50,7 +50,7 @@ RC:
     max: 1920
   thrust:
     min: 1070
-    mid: 1340
+    mid: 1440
     max: 1920
 ArmThrust: 35
 Takeoff:

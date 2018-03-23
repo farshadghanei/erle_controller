@@ -6,6 +6,11 @@
 #include "mavros_msgs/CommandBool.h"
 #include "mavros_setstreamrate.h"
 
+const bool CONTROL_ROLL=true;
+const bool CONTROL_PITCH=true;
+const bool CONTROL_YAW=false;
+const bool CONTROL_THRUST=false;
+
 //ROS node name
 extern std::string NODE_NAME;
 
@@ -155,10 +160,17 @@ public:
 private:
     /* applying PID values biased around middle stick values (hover value for thrust) */
     void rc_biasedOutput(geometry_msgs::Twist msg) {
-        rc_setChannel(Pitch, m_RC_pitch_mid + msg.linear.x);
-        rc_setChannel(Roll, m_RC_roll_mid + msg.linear.y);
-        rc_setChannel(Thrust, m_RC_thrust_mid + msg.linear.z);
-        rc_setChannel(Yaw, 0); //Force access RC
+        if (CONTROL_PITCH)    rc_setChannel(Pitch, m_RC_pitch_mid + msg.linear.x);
+        else                  rc_setChannel(Pitch, 0);
+
+        if (CONTROL_ROLL)     rc_setChannel(Roll, m_RC_roll_mid + msg.linear.y);
+        else                  rc_setChannel(Roll, 0);
+
+        if (CONTROL_YAW)      rc_setChannel(Yaw, m_RC_yaw_mid + msg.angular.z);
+        else                  rc_setChannel(Yaw, 0);
+      
+        if (CONTROL_THRUST)   rc_setChannel(Thrust, m_RC_thrust_mid + msg.linear.z);
+        else                  rc_setChannel(Thrust, 0);
     }
 
     void goalChanged(
@@ -223,7 +235,6 @@ private:
             ros::Duration(0.5).sleep();
             //put stick to disarm position
             rc_setChannel(Yaw, m_RC_yaw_min);
-            rc_out();
             rc_out();
             rc_out();
             ros::Duration(3.0).sleep();
@@ -476,8 +487,8 @@ private:
             }
             case Armed:
             {
-                rc_setChannel(Roll, m_RC_roll_mid);
-                rc_setChannel(Pitch, m_RC_pitch_mid);
+                //rc_setChannel(Roll, m_RC_roll_mid);
+                //rc_setChannel(Pitch, m_RC_pitch_mid);
                 //prevent auto disarm
                 if (rc_getChannel(Thrust) < m_RC_thrust_min + m_armThrust) {
                     //set the thrust smoothly
