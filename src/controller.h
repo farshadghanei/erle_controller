@@ -9,7 +9,7 @@
 const bool CONTROL_ROLL=true;
 const bool CONTROL_PITCH=true;
 const bool CONTROL_YAW=false;
-const bool CONTROL_THRUST=false;
+const bool CONTROL_THRUST=true;
 
 //ROS node name
 extern std::string NODE_NAME;
@@ -144,6 +144,7 @@ public:
         m_serviceReleaseRC = nh.advertiseService("erle/releaseRC", &Controller::releaseRC, this);
         ROS_INFO("Services advertised: erle/arm, disarm, takeoff, land, stop, releaseRC");
         ROS_WARN("*** Make sure you have set ThrustMid value correctly! ***");
+        ROS_WARN("*** Make sure you have selected currect settings for Roll, Pitch, Yaw, Thrust control switches! ***");
 
         m_goal_worldFrame.pose.orientation.w = 1.0; //Just a value for default pose. Quaternions can't be all zero
     }
@@ -523,7 +524,7 @@ private:
                 if (rc_getChannel(Thrust) < m_RC_thrust_max) {
                     if (m_pose_worldFrame.pose.position.z < m_startZ + m_takeoff_liftThreshold) {
                         int currentThrust = rc_getChannel(Thrust);
-                        update_PID();
+                        //update_PID(); for now PID is off during takeoff. only thrust
                         rc_setChannel(Thrust, currentThrust +  m_takeoff_thrustStep * dt);
                     } else {
                         /* takeoff is over, shifting to automatic */
