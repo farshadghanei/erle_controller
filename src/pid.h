@@ -84,18 +84,12 @@ public:
         ros::Time time = ros::Time::now();
         float dt = time.toSec() - m_previousTime.toSec();
         float error = targetValue - value;
-        if (error - m_previousError > 0.50)
-            ROS_WARN("A jump in the PID %s error value is detected", m_name.c_str());
         float speed = (error - m_previousError) / dt;
         m_out_p = m_kp * error;
         m_out_d = 0;
         if (dt > 0) {
             m_out_d = m_kd * speed;
         }
-        if (m_previousError < m_i_approximity && error >= m_i_approximity)
-            ROS_WARN("Moved out of approximity in %s. integrator will be disabled", m_name.c_str());
-        if (m_previousError >= m_i_approximity && error < m_i_approximity)
-            ROS_WARN("Moved back to approximity in %s. integrator will be enabled", m_name.c_str());
 
         if (!m_i_force_off && error < m_i_approximity) {
             m_i_on_off = true;
@@ -107,6 +101,10 @@ public:
         m_out_i = m_ki * m_integral;
         m_out_i = std::max(std::min(m_out_i, m_integratorMax), m_integratorMin);
         float output = m_out_p + m_out_d + m_out_i;
+
+        ROS_INFO("[PID_update_%s]: time(%.2f), prev_time(%.2f), dt(%.2f), error(%.2f), prev_error(%.2f), speed(%.2f), output_uncapped(%.2f), m_out_p(%.2f), m_out_d(%.2f), m_out_i(%.2f), kp(%.2f), kd(%.2f), ki(%.2f), i_on_off(%d), m_integral(%.2f)",
+               m_name.c_str(), time.toSec(), m_previousTime.toSec(), dt, error, m_previousError, speed, output, m_out_p, m_out_d, m_out_i, m_kp, m_kd, m_ki, m_i_on_off, m_integral);
+
         m_previousError = error;
         m_previousTime = time;
         return std::max(std::min(output, m_maxOutput), m_minOutput);

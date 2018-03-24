@@ -160,6 +160,7 @@ public:
 private:
     /* applying PID values biased around middle stick values (hover value for thrust) */
     void rc_biasedOutput(geometry_msgs::Twist msg) {
+        ROS_INFO("[rc_biasedOutput]: PID_x(%.2f), PID_y(%.2f), PID_z(%.2f), PID_yaw(%.2f)", msg.linear.x, msg.linear.y, msg.linear.z, msg.angular.z);
         if (CONTROL_PITCH)    rc_setChannel(Pitch, m_RC_pitch_mid + msg.linear.x);
         else                  rc_setChannel(Pitch, 0);
 
@@ -302,17 +303,18 @@ private:
 
     /* Setting value for one of 4 RC channels, need to call rc_out afterwards */
     void rc_setChannel(Channel channel, int value) {
-	m_rc_override.channels[channel]=value;
+	    m_rc_override.channels[channel]=value;
     }
 
     /* Returning the value for one of 4 RC channels */
     int rc_getChannel(Channel channel) {
-	return m_rc_override.channels[channel];
+	    return m_rc_override.channels[channel];
     }
 
     /* publishing the RC values to override topic */    
     void rc_out(void) {
         m_pubRC.publish(m_rc_override);
+        ROS_INFO("rc_out: (%d,%d,%d,%d)", rc_getChannel(Roll), rc_getChannel(Pitch), rc_getChannel(Thrust), rc_getChannel(Yaw));
     }
 
     /* 
@@ -412,7 +414,22 @@ private:
         m_goal_worldFrame.header.stamp = m_transform.stamp_;
         m_goal_worldFrame.header.frame_id = m_worldFrame;
         m_listener.transformPose(m_frame, m_goal_worldFrame, m_goal_bodyFrame);
-        //ROS_INFO("updated transform:");  
+        ROS_INFO("[updateTransform]: pose(%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f), goal_body(%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f)",
+                 m_pose_worldFrame.pose.position.x,
+                 m_pose_worldFrame.pose.position.y,
+                 m_pose_worldFrame.pose.position.z,
+                 m_pose_worldFrame.pose.orientation.x,
+                 m_pose_worldFrame.pose.orientation.y, 
+                 m_pose_worldFrame.pose.orientation.z,
+                 m_pose_worldFrame.pose.orientation.w,
+                 m_goal_bodyFrame.pose.position.x,
+                 m_goal_bodyFrame.pose.position.y,
+                 m_goal_bodyFrame.pose.position.z,
+                 m_goal_bodyFrame.pose.orientation.x,
+                 m_goal_bodyFrame.pose.orientation.y, 
+                 m_goal_bodyFrame.pose.orientation.z,
+                 m_goal_bodyFrame.pose.orientation.w
+                );
     }
 
     void pidReset()
@@ -439,8 +456,9 @@ private:
         msg.linear.y = m_pidY.update(0.0, m_goal_bodyFrame.pose.position.y);
         msg.linear.z = m_pidZ.update(0.0, m_goal_bodyFrame.pose.position.z);
         //msg.angular.z = m_pidYaw.update(0.0, yaw);
-        if (iterationCounter==0) {
 /*
+        if (iterationCounter==0) {
+
             ROS_INFO("Position      (x, y, z): (%.2f, %.2f, %.2f)",
             m_pose_worldFrame.pose.position.x, 
             m_pose_worldFrame.pose.position.y, 
@@ -457,8 +475,8 @@ private:
             ROS_INFO("m_pidX(p, d, i)=(%.2f, %.2f, %.2f)", m_pidX.p(), m_pidX.d(), m_pidX.i());
             ROS_INFO("m_pidY(p, d, i)=(%.2f, %.2f, %.2f)", m_pidY.p(), m_pidY.d(), m_pidY.i());
             ROS_INFO("m_pidZ(p, d, i)=(%.2f, %.2f, %.2f)", m_pidZ.p(), m_pidZ.d(), m_pidZ.i());
-*/
         }
+*/
         rc_biasedOutput(msg);
 
     }
