@@ -101,10 +101,10 @@ public:
         m_out_i = m_ki * m_integral;
         m_out_i = std::max(std::min(m_out_i, m_integratorMax), m_integratorMin);
         float output = m_out_p + m_out_d + m_out_i;
-
+/*
         ROS_INFO("[PID_update_%s]: time(%.2f), prev_time(%.2f), dt(%.2f), error(%.2f), prev_error(%.2f), speed(%.2f), output_uncapped(%.2f), m_out_p(%.2f), m_out_d(%.2f), m_out_i(%.2f), kp(%.2f), kd(%.2f), ki(%.2f), i_on_off(%d), m_integral(%.2f)",
                m_name.c_str(), time.toSec(), m_previousTime.toSec(), dt, error, m_previousError, speed, output, m_out_p, m_out_d, m_out_i, m_kp, m_kd, m_ki, m_i_on_off, m_integral);
-
+*/
         m_previousError = error;
         m_previousTime = time;
         return std::max(std::min(output, m_maxOutput), m_minOutput);

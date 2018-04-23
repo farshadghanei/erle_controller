@@ -135,7 +135,8 @@ public:
         m_listener.waitForTransform(m_worldFrame, m_frame, ros::Time(0), ros::Duration(10.0)); 
         ROS_INFO("transform_listener result: %s",m_listener.allFramesAsString().c_str());
         m_pubRC = nh.advertise<mavros_msgs::OverrideRCIn>("mavros/rc/override",10);
-        m_subscribeGoal = nh.subscribe("erle/goal", 1, &Controller::goalChanged, this);
+        m_pubPose = nh.advertise<geometry_msgs::PoseStamped>("erle/pose",10);
+        m_subscribeGoal = nh.subscribe("erle/goal", 2, &Controller::goalChanged, this);
         m_serviceTakeoff = nh.advertiseService("erle/takeoff", &Controller::takeoff, this);
         m_serviceLand = nh.advertiseService("erle/land", &Controller::land, this);
         m_serviceArm = nh.advertiseService("erle/arm", &Controller::arm, this);
@@ -161,7 +162,7 @@ public:
 private:
     /* applying PID values biased around middle stick values (hover value for thrust) */
     void rc_biasedOutput(geometry_msgs::Twist msg) {
-        ROS_INFO("[rc_biasedOutput]: PID_x(%.2f), PID_y(%.2f), PID_z(%.2f), PID_yaw(%.2f)", msg.linear.x, msg.linear.y, msg.linear.z, msg.angular.z);
+        //ROS_INFO("[rc_biasedOutput]: PID_x(%.2f), PID_y(%.2f), PID_z(%.2f), PID_yaw(%.2f)", msg.linear.x, msg.linear.y, msg.linear.z, msg.angular.z);
         if (CONTROL_PITCH)    rc_setChannel(Pitch, m_RC_pitch_mid + msg.linear.x);
         else                  rc_setChannel(Pitch, 0);
 
@@ -207,8 +208,8 @@ private:
                 response = true;
                 ROS_INFO("ThrustMin: %.2f, armThrust: %.2f", m_RC_thrust_min, m_armThrust);                
                 rc_rollbackChannels();//initial value for thrust, we'll increase it gradually
-                for (int i = 0; i < m_armThrust; i++) {
-                    rc_setChannel(Thrust, m_RC_thrust_min + i);
+                for (int i = m_RC_thrust_min; i < m_RC_thrust_min + m_armThrust; i++) {
+                    rc_setChannel(Thrust, i);
                     rc_out();
                     ros::Duration(0.010).sleep();
                 }
@@ -315,7 +316,7 @@ private:
     /* publishing the RC values to override topic */    
     void rc_out(void) {
         m_pubRC.publish(m_rc_override);
-        ROS_INFO("rc_out: (%d,%d,%d,%d)", rc_getChannel(Roll), rc_getChannel(Pitch), rc_getChannel(Thrust), rc_getChannel(Yaw));
+        //ROS_INFO("rc_out: (%d,%d,%d,%d)", rc_getChannel(Roll), rc_getChannel(Pitch), rc_getChannel(Thrust), rc_getChannel(Yaw));
     }
 
     /* 
@@ -415,6 +416,10 @@ private:
         m_goal_worldFrame.header.stamp = m_transform.stamp_;
         m_goal_worldFrame.header.frame_id = m_worldFrame;
         m_listener.transformPose(m_frame, m_goal_worldFrame, m_goal_bodyFrame);
+//TODO 
+
+        m_pubPose.publish(m_pose_worldFrame);
+/*
         ROS_INFO("[updateTransform]: pose(%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f), goal_body(%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f)",
                  m_pose_worldFrame.pose.position.x,
                  m_pose_worldFrame.pose.position.y,
@@ -431,6 +436,7 @@ private:
                  m_goal_bodyFrame.pose.orientation.z,
                  m_goal_bodyFrame.pose.orientation.w
                 );
+*/
     }
 
     void pidReset()
@@ -479,7 +485,6 @@ private:
         }
 */
         rc_biasedOutput(msg);
-
     }
 
     /* repeating each dt */
@@ -580,7 +585,7 @@ private:
             break;
         }
         if (iterationCounter++ > 100) {
-/*
+
             ROS_INFO("The position is: (%.2f, %.2f, %.2f)", 
                        m_pose_worldFrame.pose.position.x, 
                        m_pose_worldFrame.pose.position.y, 
@@ -594,7 +599,7 @@ private:
                        m_goal_bodyFrame.pose.position.y, 
                        m_goal_bodyFrame.pose.position.z);
             ROS_INFO("RC_override: (%d, %d, %d, *)", rc_getChannel(Roll), rc_getChannel(Pitch), rc_getChannel(Thrust));
-*/            iterationCounter=0;
+            iterationCounter=0;
         }
     }
 
@@ -602,6 +607,7 @@ private:
     std::string m_worldFrame;
     std::string m_frame;
     ros::Publisher m_pubRC;
+    ros::Publisher m_pubPose;
     tf::TransformListener m_listener;
     PID m_pidX;
     PID m_pidY;
