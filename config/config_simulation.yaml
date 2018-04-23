@@ -1,0 +1,63 @@
+PIDs:
+  X:
+    kp: -100.0
+    kd: -100.0
+    ki: -2.0
+    minOutput: -250.0
+    maxOutput: 250.0
+    integratorMin: -50.0
+    integratorMax: 50.0
+    integratorApproximity: 1.5
+  Y:
+    kp: -100.0
+    kd: -100.0
+    ki: -2.0
+    minOutput: -250.0
+    maxOutput: 250.0
+    integratorMin: -50.0
+    integratorMax: 50.0
+    integratorApproximity: 1.5
+  Z:
+    kp: 100.0
+    kd: 100.0
+    ki: 2.0
+    minOutput: -250.0
+    maxOutput: 250.0
+    integratorMin: -50.0
+    integratorMax: 50.0
+    integratorApproximity: 1.5
+  Yaw:
+    kp: -200.0
+    kd: -20.0
+    ki: 1.0
+    minOutput: -200.0
+    maxOutput: 200.0
+    integratorMin: 0.0
+    integratorMax: 0.0
+    integratorApproximity: 0.5
+RC:
+  roll:
+    min: 1000
+    mid: 1500
+    max: 2000
+  pitch:
+    min: 1000
+    mid: 1500
+    max: 2000
+  yaw:
+    min: 1000
+    mid: 1500
+    max: 2000
+  thrust:
+    min: 1000
+    mid: 1367
+    max: 2000
+ArmThrust: 35
+Takeoff:
+    thrustStep: 150
+    targetHeight: 6.0
+    liftThreshold: 0.10
+Landing:
+    thrustStep: 25
+    targetHeight: 0.20
+    declineSpeed: 0.40
