@@ -36,3 +36,8 @@ ROS_MASTER_URI
 
 need to set SYSID_MYGCS to match FCU ID (1)
 
+
+
+emergency kill command:
+sudo kill -9 $(ps aux | grep '[A]rduCopter.elf' | awk '{print $2}')
+
